@@ -2,16 +2,25 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MOVIELENS_ROWS 1000209
-#define MOVIELENS_COLS 3
-#define MOVIELENS_USERS 6040
-#define MOVIELENS_MOVIES 3952
+#define OFFSET 3
 
 
-void load_csv(char *fname, int ratings[MOVIELENS_ROWS][MOVIELENS_COLS]){
+struct Dataset {
+    int users;
+    int movies;
+    int size;
+};
+
+
+int max(int a, int b) {
+    return (a >= b) ? a : b;
+}
+
+
+void load_csv(char *fname, int *ratings, struct Dataset *dataset){
     char buffer[20];
     char *record, *line;
-    int i=0, j=0;
+    int i=0, j=0, irecord=0;
     FILE *fstream = fopen(fname, "r");
 
     if (fstream == NULL) {
@@ -20,10 +29,19 @@ void load_csv(char *fname, int ratings[MOVIELENS_ROWS][MOVIELENS_COLS]){
     }
 
     fprintf(stderr, "Loading ratings matrix from file %s\n", fname);
+ 
     while((line = fgets(buffer, sizeof(buffer), fstream)) != NULL){
         record = strtok(line, ",");
-        while(record != NULL) {
-            ratings[i][j++] = atoi(record);
+        for(j=0; j<OFFSET; j++) {
+            irecord = atoi(record);
+
+            if (j == 0) {
+                dataset->users = max(dataset->users, irecord);
+            } else if (j == 1) {
+                dataset->movies = max(dataset->movies, irecord);
+            }
+
+            ratings[i * OFFSET + j] = irecord;
             record = strtok(NULL, ",");
         }
         i++;
@@ -31,21 +49,25 @@ void load_csv(char *fname, int ratings[MOVIELENS_ROWS][MOVIELENS_COLS]){
 } 
 
 int main(int argc, char **argv) {
-    int ratings[MOVIELENS_ROWS][MOVIELENS_COLS];
+    int *ratings;
+    struct Dataset dataset;
 
-    if (argc != 2) {
-        fprintf(stderr, "usage: ./collaborative_filtering <user_item_rating_matrix>\n");
+    if (argc != 3) {
+        fprintf(stderr, "usage: ./collaborative_filtering <user_item_rating_matrix> <no_of_ratings>\n");
         exit(EXIT_FAILURE);
     }
 
-    load_csv(argv[1], ratings);
+    dataset.size = atoi(argv[2]);
+    dataset.users = 0;
+    dataset.movies = 0;
 
-    for(int i=0; i < MOVIELENS_ROWS; i++) {
-        for(int j=0; j < MOVIELENS_COLS; j++) {
-            fprintf(stdout, "%d\t", ratings[i][j]);
-        }
-        fprintf(stdout, "\n");
-    }
+    ratings = (int *) malloc(dataset.size * OFFSET * sizeof(int));
+
+    load_csv(argv[1], ratings, &dataset);
+
+    fprintf(stderr, "Size of the dataset: %d\n", dataset.size);
+    fprintf(stderr, "Users of the dataset: %d\n", dataset.users);
+    fprintf(stderr, "Movies of the dataset: %d\n", dataset.movies);
 
     return EXIT_SUCCESS;
 }
