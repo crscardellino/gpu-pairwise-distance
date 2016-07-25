@@ -17,7 +17,7 @@ int max(int a, int b) {
 }
 
 
-void load_csv(char *fname, int *ratings, struct Dataset *dataset){
+void load_ratings_from_csv(char *fname, int *ratings, struct Dataset *dataset){
     char buffer[20];
     char *record, *line;
     int i=0, j=0, irecord=0;
@@ -41,15 +41,34 @@ void load_csv(char *fname, int *ratings, struct Dataset *dataset){
                 dataset->movies = max(dataset->movies, irecord);
             }
 
-            ratings[i * OFFSET + j] = irecord;
+            ratings[i * OFFSET + j] = (j==2) ? irecord : irecord - 1;
             record = strtok(NULL, ",");
         }
         i++;
     }
+
+    fclose(fstream);
 } 
 
+void load_user_movie_matrix(int *user_movie_matrix, int *ratings, struct Dataset dataset) {
+    int i, user, movie, rating;
+
+    fprintf(stderr, "Loading user movie matrix\n");
+    for(i=0; i < dataset.size; i++) {
+        user = ratings[i * OFFSET];
+        movie = ratings[i * OFFSET + 1];
+        rating = ratings[i * OFFSET + 2];
+        
+        user_movie_matrix[user * dataset.movies + movie] = rating;
+    }
+}
+
+void item_similarity(int *items_matrix, double *similarity_matrix) {
+
+}
+
 int main(int argc, char **argv) {
-    int *ratings;
+    int *ratings, *user_movie_matrix;
     struct Dataset dataset;
 
     if (argc != 3) {
@@ -62,12 +81,13 @@ int main(int argc, char **argv) {
     dataset.movies = 0;
 
     ratings = (int *) malloc(dataset.size * OFFSET * sizeof(int));
+    load_ratings_from_csv(argv[1], ratings, &dataset);
 
-    load_csv(argv[1], ratings, &dataset);
+    user_movie_matrix = (int *) malloc(dataset.users * dataset.movies * sizeof(int));
+    load_user_movie_matrix(user_movie_matrix, ratings, dataset);
 
-    fprintf(stderr, "Size of the dataset: %d\n", dataset.size);
-    fprintf(stderr, "Users of the dataset: %d\n", dataset.users);
-    fprintf(stderr, "Movies of the dataset: %d\n", dataset.movies);
+    free(ratings);
+    free(user_movie_matrix);
 
     return EXIT_SUCCESS;
 }
