@@ -45,3 +45,6 @@
 
 # VIM
 .*.swp
+
+# Project specific
+collaborative_filtering
