@@ -6,11 +6,11 @@ CFLAGS+=-DNDEBUG  # turn assertions off
 
 LDFLAGS=-lm
 
-all: collaborative_filtering
+all: user_cosine_similarity
 
-collaborative_filtering: collaborative_filtering.o
+user_cosine_similarity: user_cosine_similarity.o
 	$(CC) $(CFLAGS) -o $@  $^ $(LDFLAGS)
 
 clean:
-	rm -f *.o collaborative_filtering
+	rm -f *.o user_cosine_similarity
 .PHONY: clean

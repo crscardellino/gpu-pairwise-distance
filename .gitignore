@@ -47,4 +47,5 @@
 .*.swp
 
 # Project specific
-collaborative_filtering
+user_cosine_similarity
+*.csv
