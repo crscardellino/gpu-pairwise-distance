@@ -1,3 +1,6 @@
+# Prerequisites
+*.d
+
 # Object files
 *.o
 *.ko
@@ -31,3 +34,14 @@
 # Debug files
 *.dSYM/
 *.su
+
+# CUDA
+*.i
+*.ii
+*.gpu
+*.ptx
+*.cubin
+*.fatbin
+
+# VIM
+.*.swp
