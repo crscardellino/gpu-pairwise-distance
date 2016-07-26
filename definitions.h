@@ -8,10 +8,13 @@
 
 /* Struct to hold information regarding a dataset (size, no of users and no of items) */
 typedef struct sDataset {
-    int size;
-    int users;
-    int items;
+    unsigned int size;
+    unsigned int users;
+    unsigned int items;
 } * Dataset;
+
+/* Result misscalculation tolerance */
+#define ERROR 0.00001
 
 /* Debug messages printing */
 #ifdef DEBUG
