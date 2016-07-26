@@ -1,2 +1,4 @@
-# gpu-pairwise-distance
-CUDA implementation for pairwise distance metrics, useful for collaborative filtering
+# Parallel Item Cosine Similarity
+
+Different parallel implementations for matrix cosine similarity for
+item based collaborative filtering.
