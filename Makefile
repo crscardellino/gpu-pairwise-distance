@@ -1,5 +1,5 @@
 CC=cc
-CFLAGS=-Wall -Wextra -pedantic -std=c99 -g
+override CFLAGS+=-Wall -Wextra -pedantic -std=c99 -g
 CFLAGS+=-D_POSIX_C_SOURCE  # avoid "fileno" warnings due to c99 standard
 CFLAGS+=-DDEBUG   # turn debug messages on
 CFLAGS+=-DNDEBUG  # turn assertions off
