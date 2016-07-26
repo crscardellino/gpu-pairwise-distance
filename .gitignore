@@ -47,5 +47,5 @@
 .*.swp
 
 # Project specific
-user_cosine_similarity
+item_cosine_similarity
 *.csv

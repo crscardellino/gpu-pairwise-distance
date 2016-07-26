@@ -6,11 +6,11 @@ CFLAGS+=-DNDEBUG  # turn assertions off
 
 LDFLAGS=-lm
 
-all: user_cosine_similarity
+all: item_cosine_similarity
 
-user_cosine_similarity: user_cosine_similarity.o
+item_cosine_similarity: item_cosine_similarity.o
 	$(CC) $(CFLAGS) -o $@  $^ $(LDFLAGS)
 
 clean:
-	rm -f *.o user_cosine_similarity
+	rm -f *.o item_cosine_similarity
 .PHONY: clean

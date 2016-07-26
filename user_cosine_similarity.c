@@ -46,9 +46,9 @@ static void load_ratings_from_csv(
 } 
 
 
-/* Load the ratings matrix to a user/item matrix */
-static void load_user_item_matrix(
-    int *user_item_matrix, 
+/* Load the ratings matrix to a item/user matrix */
+static void load_item_user_matrix(
+    int *item_user_matrix, 
     int *ratings,
     Dataset dataset) 
 {
@@ -60,7 +60,7 @@ static void load_user_item_matrix(
         item = ratings[i * OFFSET + 1];
         rating = ratings[i * OFFSET + 2];
         
-        user_item_matrix[user * dataset->items + item] = rating;
+        item_user_matrix[item * dataset->users + user] = rating;
     }
 }
 
@@ -69,24 +69,24 @@ static void load_user_item_matrix(
 static inline float cosine_similarity_v1(
     int u, 
     int v, 
-    int items,
+    int offset,
     int *vector_matrix)
 {
     int i;
     float num = 0., uden = 0., vden = 0.;
 
-    for(i=0; i<items; i++) {
-        num += (float) (vector_matrix[u * items + i] * vector_matrix[v * items + i]);
-        uden += (float) (vector_matrix[u * items + i] * vector_matrix[u * items + i]);
-        vden += (float) (vector_matrix[v * items + i] * vector_matrix[v * items + i]);
+    for(i=0; i<offset; i++) {
+        num += (float) (vector_matrix[u * offset + i] * vector_matrix[v * offset + i]);
+        uden += (float) (vector_matrix[u * offset + i] * vector_matrix[u * offset + i]);
+        vden += (float) (vector_matrix[v * offset + i] * vector_matrix[v * offset + i]);
     }
 
     return num / (sqrt(uden) * sqrt(vden));
 }
 
 
-static void user_cosine_similarity_v1(
-    int *user_item_matrix,
+static void item_cosine_similarity_v1(
+    int *item_user_matrix,
     float *similarity_matrix,
     Dataset dataset)
 {
@@ -94,14 +94,14 @@ static void user_cosine_similarity_v1(
     float dist = 0.;
 
     fprintf(stderr, "Calculating users cosine similarity matrix\n");
-    for(u=0; u < dataset->users; u++) {
-        for(v=u; v < dataset->users; v++) {
-            dist = cosine_similarity_v1(u, v, dataset->items, user_item_matrix);
+    for(u=0; u < dataset->items; u++) {
+        for(v=u; v < dataset->items; v++) {
+            dist = cosine_similarity_v1(u, v, dataset->users, item_user_matrix);
  
-            similarity_matrix[u * dataset->users + v] = dist;
+            similarity_matrix[u * dataset->items + v] = dist;
  
             if (u != v) 
-                similarity_matrix[v * dataset->users + u] = dist;
+                similarity_matrix[v * dataset->items + u] = dist;
         }
     }
 }
@@ -109,11 +109,11 @@ static void user_cosine_similarity_v1(
 
 int main(int argc, char **argv) {
     Dataset dataset;
-    int *ratings, *user_item_matrix; 
+    int *ratings, *item_user_matrix; 
     float *similarity_matrix;
 
     if (argc != 3) {
-        fprintf(stderr, "usage: ./user_cosine_similarity <user_item_rating_csv> <no_of_ratings>\n");
+        fprintf(stderr, "usage: ./item_cosine_similarity <user_item_rating_csv> <no_of_ratings>\n");
         exit(EXIT_FAILURE);
     }
 
@@ -125,15 +125,15 @@ int main(int argc, char **argv) {
     ratings = (int *) calloc(dataset->size * OFFSET, sizeof(int));
     load_ratings_from_csv(argv[1], ratings, dataset);
 
-    user_item_matrix = (int *) calloc(dataset->users * dataset->items, sizeof(int));
-    load_user_item_matrix(user_item_matrix, ratings, dataset);
+    item_user_matrix = (int *) calloc(dataset->items * dataset->users, sizeof(int));
+    load_item_user_matrix(item_user_matrix, ratings, dataset);
 
-    similarity_matrix = (float *) calloc(dataset->users * dataset->users, sizeof(float));
-    user_cosine_similarity_v1(user_item_matrix, similarity_matrix, dataset);
+    similarity_matrix = (float *) calloc(dataset->items * dataset->items, sizeof(float));
+    item_cosine_similarity_v1(item_user_matrix, similarity_matrix, dataset);
 
     free(dataset);
     free(ratings);
-    free(user_item_matrix);
+    free(item_user_matrix);
 
     return EXIT_SUCCESS;
 }
