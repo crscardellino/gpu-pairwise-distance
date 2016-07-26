@@ -1,0 +1,27 @@
+Loading ratings matrix from file data/movielens100000.csv
+Successfully loaded 100000 total ratings of 943 users and 1682 items
+Loding the correction vector from file data/movielens100000.vec
+Loading item/user matrix of size 1682x943
+Calculating items cosine similarity matrices of 1682 elements
+Iteration number # 1 (0 left)
+Computation took [22;33m10.45621890[0m s (σ²≈0.0000)
+Correction using the given vector and an error of 0.00001
+Calculations were CORRECT
+
+ Performance counter stats for './item_cosine_similarity data/movielens100000.csv data/movielens100000.vec 100000':
+
+      10740.774603      task-clock (msec)         #    1.000 CPUs utilized          
+                19      context-switches          #    0.002 K/sec                  
+                 0      cpu-migrations            #    0.000 K/sec                  
+            10,211      page-faults               #    0.951 K/sec                  
+    33,547,001,831      cycles                    #    3.123 GHz                    
+   110,916,809,611      instructions              #    3.31  insn per cycle         
+     1,650,214,985      branches                  #  153.640 M/sec                  
+         6,216,992      branch-misses             #    0.38% of all branches        
+    48,367,606,496      L1-dcache-loads           # 4503.177 M/sec                  
+        88,206,967      L1-dcache-load-misses     #    0.18% of all L1-dcache hits  
+         3,780,987      LLC-loads                 #    0.352 M/sec                  
+           139,180      LLC-load-misses           #    3.68% of all LL-cache hits   
+
+      10.742281591 seconds time elapsed
+
