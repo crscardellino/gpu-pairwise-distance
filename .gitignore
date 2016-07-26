@@ -49,3 +49,5 @@
 # Project specific
 item_cosine_similarity
 *.csv
+*.mtx
+*.vec
