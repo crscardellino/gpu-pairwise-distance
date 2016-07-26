@@ -4,6 +4,8 @@
 #include <string.h>
 #include <math.h>
 #include <omp.h>
+
+#include "hugepages/thp.h"  // huge pages allocation
 #include "definitions.h"
 
 
@@ -153,24 +155,24 @@ int main(int argc, char **argv) {
     dataset->items = 0;
 
     /* Load ratings dataset from the given csv file */
-    ratings = (int *) calloc(dataset->size * RATINGS_OFFSET, sizeof(int));
+    ratings = (int *) alloc(dataset->size * RATINGS_OFFSET, sizeof(int));
     debug("Loading ratings matrix from file %s\n", argv[1]);
     load_ratings_from_csv(argv[1], ratings, dataset);
     debug("Successfully loaded %d total ratings of %d users and %d items\n", dataset->size, dataset->users, dataset->items);
 
 	/* We use a vector (representing the upper side of a triangular matrix) in order to make the correction */
 	vector_size = dataset->items * (dataset->items + 1) / 2;
-	correction_vector = (double *) calloc(vector_size, sizeof(double));
+	correction_vector = (double *) alloc(vector_size, sizeof(double));
 	debug("Loding the correction vector from file %s\n", argv[2]);
 	load_correction_vector(argv[2], correction_vector);
  
     /* Create the item/user matrix from the previously loaded ratings dataset */
-    item_user_matrix = (int *) calloc(dataset->items * dataset->users, sizeof(int));
+    item_user_matrix = (int *) alloc(dataset->items * dataset->users, sizeof(int));
     debug("Loading item/user matrix of size %dx%d\n", dataset->items, dataset->users);
     load_item_user_matrix(item_user_matrix, ratings, dataset);
 
     /* Calculate the similarity matrix row-wise from the item/user matrix. This is what I want to optimize */
-    similarity_matrix = (double *) calloc(dataset->items * dataset->items, sizeof(double));
+    similarity_matrix = (double *) alloc(dataset->items * dataset->items, sizeof(double));
     debug("Calculating items cosine similarity matrices of %d elements\n", dataset->items);
 
     /* Useful for removing noise given by the usage of the machine */

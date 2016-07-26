@@ -4,24 +4,21 @@ Loding the correction vector from file data/movielens100000.vec
 Loading item/user matrix of size 1682x943
 Calculating items cosine similarity matrices of 1682 elements
 Iteration number # 1 (9 left)Iteration number # 2 (8 left)Iteration number # 3 (7 left)Iteration number # 4 (6 left)Iteration number # 5 (5 left)Iteration number # 6 (4 left)Iteration number # 7 (3 left)Iteration number # 8 (2 left)Iteration number # 9 (1 left)Iteration number # 10 (0 left)
-Computation took [22;33m3.80454531[0m s (σ²≈0.1026)
+Computation took [22;33m3.78865920[0m s (σ²≈0.0157)
 Correction using the given vector and an error of 0.00001
 Calculations were CORRECT
 
  Performance counter stats for './item_cosine_similarity data/movielens100000.csv data/movielens100000.vec 100000 10':
 
-      38328.669397      task-clock (msec)         #    1.000 CPUs utilized          
-               242      context-switches          #    0.006 K/sec                  
-                 0      cpu-migrations            #    0.000 K/sec                  
-            10,212      page-faults               #    0.266 K/sec                  
-   121,273,131,798      cycles                    #    3.164 GHz                    
-   241,953,361,214      instructions              #    2.00  insn per cycle         
-    13,714,782,987      branches                  #  357.820 M/sec                  
-        16,247,434      branch-misses             #    0.12% of all branches        
-    26,924,498,377      L1-dcache-loads           #  702.464 M/sec                  
-       860,815,792      L1-dcache-load-misses     #    3.20% of all L1-dcache hits  
-        20,131,902      LLC-loads                 #    0.525 M/sec                  
-           298,753      LLC-load-misses           #    1.48% of all LL-cache hits   
+      38166.817454      task-clock (msec)         #    1.000 CPUs utilized          
+                30      context-switches          #    0.001 K/sec                  
+            10,211      page-faults               #    0.268 K/sec                  
+   121,227,850,562      cycles                    #    3.176 GHz                    
+   241,952,866,107      instructions              #    2.00  insn per cycle         
+        35,579,100      cache-references          #    0.932 M/sec                  
+         1,564,159      cache-misses              #    4.396 % of all cache refs    
+    13,714,706,122      branches                  #  359.336 M/sec                  
+        16,248,365      branch-misses             #    0.12% of all branches        
 
-      38.333674147 seconds time elapsed
+      38.170204883 seconds time elapsed
 

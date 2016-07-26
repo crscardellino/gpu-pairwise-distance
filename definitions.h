@@ -26,6 +26,13 @@ typedef struct sDataset {
 # define debug(format,...)
 #endif
 
+/* Alloc according to the activation of HUGEPAGES */
+#ifdef THP
+# define alloc(dim,size) __malloc_thp_padded(dim*size)
+#else
+# define alloc(dim, size) calloc(dim, size)
+#endif
+
 /* Color text printing codes */
 #define  RED_TEXT       "\33[22;31m"
 #define  RED_B_TEXT     "\33[1;31m"
