@@ -1,7 +1,7 @@
 CC=cc
 CFLAGS+=-Wall -Wextra -pedantic -std=c99
 CFLAGS+=-D_POSIX_C_SOURCE  # avoid "fileno" warnings due to c99 standard
-CFLAGS+=-DDEBUG -g   	   # turn debug messages on
+CFLAGS+=-DDEBUG      	   # turn debug messages on
 
 LDFLAGS=-lm -lgomp
 
