@@ -53,11 +53,10 @@ static void load_ratings_from_csv(
 /* Load the correction vector from the given file */
 static void load_correction_vector(
     char *fname,
-    double *correction_vector)
+    double *correction_vector,
+    int vector_size)
 {
-    char buffer[10];
-    int i=0;
-    char *line;
+    int i, read;
     FILE *fstream = fopen(fname, "r");
     
     if(fstream == NULL) {
@@ -65,9 +64,16 @@ static void load_correction_vector(
         exit(EXIT_FAILURE);
     }   
     
-    while((line = fgets(buffer, sizeof(buffer), fstream)) != NULL) {
-        correction_vector[i++] = atof(line);
+    for(i = 0; i < vector_size; i++) {
+        read = fscanf(fstream, "%le", &correction_vector[i]);
+        if(read == EOF) {
+            fprintf(stderr, "Error while reading file %s in element # %d\n", fname, i);
+            fclose(fstream);
+            exit(EXIT_FAILURE);
+        }
     }
+
+    fclose(fstream);
 }
 
 
@@ -91,12 +97,12 @@ static void load_item_user_matrix(
 }
 
 
-/********************************
- * Cosine similarity operations *
- *******************************/
+/************************************
+ * Cosine similarity operations CPU *
+ ***********************************/
 
 /* Returns the cosine similarity between two rows of a matrix */
-static inline double cosine_similarity_v1(
+static inline double cosine_similarity(
     int u, 
     int v, 
     int offset,
@@ -116,7 +122,7 @@ static inline double cosine_similarity_v1(
 
 
 /* Returns the similarity matrix by measuring cosine similarity pairwise for each row of the matrix */
-static void item_cosine_similarity_v1(
+static void item_cosine_similarity(
     int *item_user_matrix,
     double *similarity_matrix,
     Dataset dataset)
@@ -126,7 +132,7 @@ static void item_cosine_similarity_v1(
 
     for(u=0; u < dataset->items; u++) {
         for(v=u; v < dataset->items; v++) {
-            dist = cosine_similarity_v1(u, v, dataset->users, item_user_matrix);
+            dist = cosine_similarity(u, v, dataset->users, item_user_matrix);
  
             similarity_matrix[u * dataset->items + v] = dist;
  
@@ -136,6 +142,10 @@ static void item_cosine_similarity_v1(
     }
 }
 
+
+/*****************
+ * Main function *
+ ****************/
 
 int main(int argc, char **argv) {
     bool correct=true;
@@ -172,7 +182,7 @@ int main(int argc, char **argv) {
     vector_size = dataset->items * (dataset->items + 1) / 2;
     correction_vector = (double *) alloc(vector_size, sizeof(double));
     debug("Loding the correction vector from file %s\n", argv[2]);
-    load_correction_vector(argv[2], correction_vector);
+    load_correction_vector(argv[2], correction_vector, vector_size);
  
     /* Create the item/user matrix from the previously loaded ratings dataset */
     item_user_matrix = (int *) alloc(dataset->items * dataset->users, sizeof(int));
@@ -192,7 +202,7 @@ int main(int argc, char **argv) {
         startTime = omp_get_wtime();
  
         /*  What I want to optimize */
-        item_cosine_similarity_v1(item_user_matrix, similarity_matrix, dataset);
+        item_cosine_similarity(item_user_matrix, similarity_matrix, dataset);
         
         currentTime = omp_get_wtime() - startTime;
         previousMean = timeMean;
@@ -202,7 +212,7 @@ int main(int argc, char **argv) {
     debug("\nComputation took %s%.8f%s s (σ²≈%.4f)\n", YELLOW_TEXT, timeMean, NO_COLOR, timeVar);
 
     /* Correction using the previously loaded correction vector */
-    debug("Correction using the given vector and an error of %.5f\n", ERROR);
+    debug("Correction using the given vector and an error of %.0e\n", ERROR);
     for(i = 0; i < dataset->items && correct; i++) {
         for(j = i; j < dataset->items && correct; j++) {
             /* Position of the value in the similarity matrix */
