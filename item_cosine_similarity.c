@@ -9,6 +9,10 @@
 #include "definitions.h"
 
 
+/***********************************************
+ * Operations for loading matrices and vectors *
+ **********************************************/
+
 /* Load the ratings from a csv file with the format USERID, ITEMID, RATING */
 static void load_ratings_from_csv(
     char *fname,
@@ -48,22 +52,22 @@ static void load_ratings_from_csv(
 
 /* Load the correction vector from the given file */
 static void load_correction_vector(
-	char *fname,
-	double *correction_vector)
+    char *fname,
+    double *correction_vector)
 {
-	char buffer[10];
-	int i=0;
-	char *line;
-	FILE *fstream = fopen(fname, "r");
-	
-	if(fstream == NULL) {
-		fprintf(stderr, "Error opening the file %s\n", fname);
-		exit(EXIT_FAILURE);
-	}	
-	
-	while((line = fgets(buffer, sizeof(buffer), fstream)) != NULL) {
-		correction_vector[i++] = atof(line);
-	}
+    char buffer[10];
+    int i=0;
+    char *line;
+    FILE *fstream = fopen(fname, "r");
+    
+    if(fstream == NULL) {
+        fprintf(stderr, "Error opening the file %s\n", fname);
+        exit(EXIT_FAILURE);
+    }   
+    
+    while((line = fgets(buffer, sizeof(buffer), fstream)) != NULL) {
+        correction_vector[i++] = atof(line);
+    }
 }
 
 
@@ -86,6 +90,10 @@ static void load_item_user_matrix(
     }
 }
 
+
+/********************************
+ * Cosine similarity operations *
+ *******************************/
 
 /* Returns the cosine similarity between two rows of a matrix */
 static inline double cosine_similarity_v1(
@@ -143,8 +151,8 @@ int main(int argc, char **argv) {
 
     if (argc < 4 || argc > 5) {
         fprintf(stderr, 
-			"usage: ./item_cosine_similarity <user_item_rating_csv> <correction_vector_vec> <no_of_ratings> [<no_of_iterations>]\n"
-		);
+            "usage: ./item_cosine_similarity <user_item_rating_csv> <correction_vector_vec> <no_of_ratings> [<no_of_iterations>]\n"
+        );
         exit(EXIT_FAILURE);
     }
 
@@ -160,11 +168,11 @@ int main(int argc, char **argv) {
     load_ratings_from_csv(argv[1], ratings, dataset);
     debug("Successfully loaded %d total ratings of %d users and %d items\n", dataset->size, dataset->users, dataset->items);
 
-	/* We use a vector (representing the upper side of a triangular matrix) in order to make the correction */
-	vector_size = dataset->items * (dataset->items + 1) / 2;
-	correction_vector = (double *) alloc(vector_size, sizeof(double));
-	debug("Loding the correction vector from file %s\n", argv[2]);
-	load_correction_vector(argv[2], correction_vector);
+    /* We use a vector (representing the upper side of a triangular matrix) in order to make the correction */
+    vector_size = dataset->items * (dataset->items + 1) / 2;
+    correction_vector = (double *) alloc(vector_size, sizeof(double));
+    debug("Loding the correction vector from file %s\n", argv[2]);
+    load_correction_vector(argv[2], correction_vector);
  
     /* Create the item/user matrix from the previously loaded ratings dataset */
     item_user_matrix = (int *) alloc(dataset->items * dataset->users, sizeof(int));
@@ -193,25 +201,25 @@ int main(int argc, char **argv) {
     }
     debug("\nComputation took %s%.8f%s s (σ²≈%.4f)\n", YELLOW_TEXT, timeMean, NO_COLOR, timeVar);
 
-	/* Correction using the previously loaded correction vector */
-	debug("Correction using the given vector and an error of %.5f\n", ERROR);
-	for(i = 0; i < dataset->items && correct; i++) {
-		for(j = i; j < dataset->items && correct; j++) {
+    /* Correction using the previously loaded correction vector */
+    debug("Correction using the given vector and an error of %.5f\n", ERROR);
+    for(i = 0; i < dataset->items && correct; i++) {
+        for(j = i; j < dataset->items && correct; j++) {
             /* Position of the value in the similarity matrix */
-		    ij = i * dataset->items + j;
+            ij = i * dataset->items + j;
             /* Position of the value in the correction vector */
-		    ai = (dataset->items * i) + j - i * (i+1) / 2; 
-			
-			correct = fabs(similarity_matrix[ij] - correction_vector[ai]) < ERROR ? true : false;
-		}
-	}
+            ai = (dataset->items * i) + j - i * (i+1) / 2; 
+            
+            correct = fabs(similarity_matrix[ij] - correction_vector[ai]) < ERROR ? true : false;
+        }
+    }
     debug("Calculations were %s\n", correct ? "CORRECT" : "WRONG !!!");
 
     free(dataset);
     free(ratings);
     free(item_user_matrix);
-	free(similarity_matrix);
-	free(correction_vector);
+    free(similarity_matrix);
+    free(correction_vector);
 
     return EXIT_SUCCESS;
 }
