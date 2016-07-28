@@ -14,7 +14,7 @@ typedef struct sDataset {
 } * Dataset;
 
 /* Result misscalculation tolerance */
-#define ERROR 1e-10
+#define ERROR 1e-7
 
 /* Debug messages printing */
 #ifdef DEBUG
