@@ -48,6 +48,7 @@
 
 # Project specific
 item_cosine_similarity
+item_cosine_similarity_cuda
 *.csv
 *.mtx
 *.vec
