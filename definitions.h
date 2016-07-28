@@ -2,6 +2,7 @@
 #define __DEFINITIONS_H
 
 #define RATINGS_OFFSET 3
+#define BLOCK_SIZE 32
 
 /* Return the max between two values */
 #define max(a, b) ((a >= b) ? a : b)
@@ -13,8 +14,11 @@ typedef struct sDataset {
     unsigned int items;
 } * Dataset;
 
+/* Value type for the calculations */
+typedef double value_type;
+
 /* Result misscalculation tolerance */
-#define ERROR 1e-7
+#define ERROR 1e-10
 
 /* Debug messages printing */
 #ifdef DEBUG
