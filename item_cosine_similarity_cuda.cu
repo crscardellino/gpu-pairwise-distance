@@ -70,7 +70,7 @@ static void load_correction_vector(
     }   
     
     for(i = 0; i < vector_size; i++) {
-        read = fscanf(fstream, "%le", &correction_vector[i]);
+        read = fscanf(fstream, "%e", &correction_vector[i]);
         if(read == EOF) {
             fprintf(stderr, "Error while reading file %s in element # %d\n", 
                     fname, i);
@@ -150,7 +150,7 @@ __global__ void item_cosine_similarity_cuda(
 {
     unsigned int i, ui, vi;
     unsigned int u = blockIdx.y * blockDim.y + threadIdx.y;
-    unsigned int v = blockIdx.y * blockDim.y + threadIdx.y;
+    unsigned int v = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int uv = items * u + v - u * (u + 1) / 2;
     value_type num=0., uden=0., vden=0.;
 
@@ -164,7 +164,7 @@ __global__ void item_cosine_similarity_cuda(
         vden += (value_type) (item_user_matrix[vi] * item_user_matrix[vi]);
     }
 
-    similarity_matrix[uv] = num / (sqrt(uden) * sqrt(vden));
+    similarity_matrix[uv] = num / (sqrtf(uden) * sqrtf(vden));
 }
 
 
@@ -258,14 +258,17 @@ int main(int argc, char **argv) {
         refTimeMean += 1.0/(double) i * (currentTime-previousMean);
         refTimeVar  += (currentTime-previousMean)*(currentTime-refTimeMean);
     }
-    debug("\nReference computation took %s%.5e%s s (σ²≈%.5e) \
-            plus %s%.5e%s for the setup.\n", YELLOW_TEXT, refTimeMean, NO_COLOR, 
-            refTimeVar, RED_TEXT, cpuTime, NO_COLOR);
+    debug("\nReference computation took %s%.5e%s s (σ²≈%.5e) plus %s%.5e%s for the setup.\n", 
+            YELLOW_TEXT, refTimeMean, NO_COLOR, refTimeVar, YELLOW_TEXT, cpuTime,
+            NO_COLOR);
 
     /* CUDA Setup */
 
     thisTime = omp_get_wtime();
 
+    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
+    dim3 dimGrid((dataset->items + dimBlock.x - 1)/dimBlock.x,
+            (dataset->items + dimBlock.y - 1)/dimBlock.y, 1);
     checkCudaErrors(cudaMalloc(&d_item_user_matrix, 
                 dataset->items * dataset->users * sizeof(int)));
     checkCudaErrors(cudaMalloc(&d_similarity_matrix, 
@@ -274,13 +277,12 @@ int main(int argc, char **argv) {
     checkCudaErrors(cudaMemcpy(d_item_user_matrix, item_user_matrix, 
                 dataset->items * dataset->users * sizeof(int), 
                 cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy(d_similarity_matrix, similarity_matrix, 
-                distance_matrix_size * sizeof(value_type), cudaMemcpyHostToDevice));
-    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 dimGrid(1 + dataset->items/BLOCK_SIZE, 1 + dataset->items/BLOCK_SIZE);
+    checkCudaErrors(cudaMemset(d_similarity_matrix, 0.0f, 
+                distance_matrix_size * sizeof(value_type)));
 
     globalTime += omp_get_wtime() - thisTime;
 
+    /* Optimized computation */
     debug("Optimized computation will run %d iterations\n", num_iterations);
 
     for(i = 1; i <= num_iterations; i++) {
@@ -302,21 +304,35 @@ int main(int argc, char **argv) {
                 distance_matrix_size * sizeof(value_type), cudaMemcpyDeviceToHost));
     globalTime = omp_get_wtime() - thisTime;
     
-    debug("\nOptimized computation took %s%.5e%s s (σ²≈%.5e) \
-            plus %s%.5e%s for the setup.\n", YELLOW_TEXT, optTimeMean, NO_COLOR, 
-            optTimeVar, RED_TEXT, globalTime, NO_COLOR);
+    debug("\nOptimized computation took %s%.5e%s s (σ²≈%.5e) plus %s%.5e%s "
+            "for the setup.\n", 
+            YELLOW_TEXT, optTimeMean, NO_COLOR, optTimeVar, YELLOW_TEXT, globalTime,
+            NO_COLOR);
 	debug("(opt_time / ref_time) ratio: %.5e\n", optTimeMean/refTimeMean);
     debug("( opt_var / ref_var ) ratio: %.5e\n", optTimeVar/refTimeVar);
+    debug("Rough calculations time speedup: %s%.2fx%s\n",
+          BLUE_TEXT, (refTimeMean)/(optTimeMean), NO_COLOR);
     debug("Rough wall time speedup: %s%.2fx%s\n",
-          GREEN_B_TEXT, (refTimeMean+cpuTime)/(optTimeMean+globalTime), NO_COLOR);
+          BLUE_TEXT, (refTimeMean+cpuTime)/(optTimeMean+globalTime), NO_COLOR);
  
     /* Correction using the previously loaded correction vector */
     debug("Correction using the given vector and an error of %.0e\n", ERROR);
-    for(i = 0; i < distance_matrix_size && correct; i++) {
-        correct = fabs(similarity_matrix[i] - correction_vector[i]) < ERROR 
-            ? true : false;
+    for(i = 0; i < distance_matrix_size; i++) {
+        if(fabs(similarity_matrix[i] - correction_vector[i]) >= ERROR) {
+            correct = false;
+#ifdef DEBUG
+            fprintf(stdout, "%d %.5e %.5e %.5e\n", i, similarity_matrix[i], 
+                    correction_vector[i], 
+                    fabs(similarity_matrix[i] - correction_vector[i]));
+            fflush(stdout);
+#endif
+        }
     }
-    debug("Calculations were %s\n", correct ? "CORRECT" : "WRONG !!!");
+    if(correct){
+        debug("Calculations were %s%s%s\n", GREEN_TEXT, "CORRECT", NO_COLOR);
+    } else {
+        debug("Calculations were %s%s%s\n", RED_TEXT, "WRONG", NO_COLOR);
+    }
 
     free(dataset);
     free(ratings);
