@@ -52,3 +52,4 @@ item_cosine_similarity_cuda
 *.csv
 *.mtx
 *.vec
+*.log
