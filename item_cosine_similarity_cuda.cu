@@ -70,7 +70,7 @@ static void load_correction_vector(
     }   
     
     for(i = 0; i < vector_size; i++) {
-        read = fscanf(fstream, "%e", &correction_vector[i]);
+        read = fscanf(fstream, "%le", &correction_vector[i]);
         if(read == EOF) {
             fprintf(stderr, "Error while reading file %s in element # %d\n", 
                     fname, i);
@@ -145,14 +145,15 @@ static void item_cosine_similarity(
 __global__ void item_cosine_similarity_cuda(
     const int *item_user_matrix,
     value_type *similarity_matrix,
-    const unsigned int items,
-    const unsigned int users)
+    const int items,
+    const int users)
 {
-    unsigned int i, ui, vi;
-    unsigned int u = blockIdx.y * blockDim.y + threadIdx.y;
-    unsigned int v = blockIdx.x * blockDim.x + threadIdx.x;
-    unsigned int uv = items * u + v - u * (u + 1) / 2;
+    int i, ui, vi, uv;
+    int u = blockIdx.y * blockDim.y + threadIdx.y;
+    int v = blockIdx.x * blockDim.x + threadIdx.x;
     value_type num=0., uden=0., vden=0.;
+
+    uv = items * u + v - u * (u + 1) / 2;
 
     if(v < u || u >= items || v >= items) return;
 
@@ -164,7 +165,7 @@ __global__ void item_cosine_similarity_cuda(
         vden += (value_type) (item_user_matrix[vi] * item_user_matrix[vi]);
     }
 
-    similarity_matrix[uv] = num / (sqrtf(uden) * sqrtf(vden));
+    similarity_matrix[uv] = num * rsqrt(uden) * rsqrt(vden);
 }
 
 
@@ -178,9 +179,7 @@ int main(int argc, char **argv) {
     double startTime=0., 
            currentTime=0., 
            refTimeMean=0., 
-           refTimeVar=0., 
-           optTimeMean=0., 
-           optTimeVar=0., 
+           optTime=0., 
            previousMean=0.,
 		   cpuTime=0.,
            globalTime=0.,
@@ -256,10 +255,9 @@ int main(int argc, char **argv) {
         currentTime = omp_get_wtime() - startTime;
         previousMean = refTimeMean;
         refTimeMean += 1.0/(double) i * (currentTime-previousMean);
-        refTimeVar  += (currentTime-previousMean)*(currentTime-refTimeMean);
     }
-    debug("\nReference computation took %s%.5e%s s (σ²≈%.5e) plus %s%.5e%s for the setup.\n", 
-            YELLOW_TEXT, refTimeMean, NO_COLOR, refTimeVar, YELLOW_TEXT, cpuTime,
+    debug("\nReference computation took %s%.5e%s s, plus %s%.5e%s for the setup.\n", 
+            YELLOW_TEXT, refTimeMean, NO_COLOR, YELLOW_TEXT, cpuTime,
             NO_COLOR);
 
     /* CUDA Setup */
@@ -276,44 +274,39 @@ int main(int argc, char **argv) {
     assert(d_item_user_matrix && d_similarity_matrix);
     checkCudaErrors(cudaMemcpy(d_item_user_matrix, item_user_matrix, 
                 dataset->items * dataset->users * sizeof(int), 
-                cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemset(d_similarity_matrix, 0.0f, 
-                distance_matrix_size * sizeof(value_type)));
+                cudaMemcpyDefault));
 
     globalTime += omp_get_wtime() - thisTime;
 
-    /* Optimized computation */
-    debug("Optimized computation will run %d iterations\n", num_iterations);
-
-    for(i = 1; i <= num_iterations; i++) {
-        debug("\rOptimized iteration number # %d (%d left)", i, num_iterations-i);
-        
-        startTime = omp_get_wtime();
+    debug("Running optimized computation\n");
  
-        item_cosine_similarity_cuda<<< dimGrid, dimBlock >>>(d_item_user_matrix, 
-                d_similarity_matrix, dataset->items, dataset->users);
+    /* Optimized computation */
         
-        currentTime = omp_get_wtime() - startTime;
-        previousMean = optTimeMean;
-        optTimeMean += 1.0/(double) i * (currentTime-previousMean);
-        optTimeVar  += (currentTime-previousMean)*(currentTime-optTimeMean);
-    }
+    startTime = omp_get_wtime();
+
+    /* Run cuda kernel */
+    checkCudaErrors(cudaMemset(d_similarity_matrix, 0.0f, 
+                distance_matrix_size * sizeof(value_type)));
+    item_cosine_similarity_cuda<<< dimGrid, dimBlock >>>(d_item_user_matrix, 
+            d_similarity_matrix, (int) dataset->items, (int) dataset->users);
+    getLastCudaError("item_cosine_similarity_cuda() kernel failed");
+    checkCudaErrors(cudaDeviceSynchronize());
+ 
+    optTime = omp_get_wtime() - startTime;
 
     thisTime = omp_get_wtime();
     checkCudaErrors(cudaMemcpy(similarity_matrix, d_similarity_matrix, 
-                distance_matrix_size * sizeof(value_type), cudaMemcpyDeviceToHost));
+                distance_matrix_size * sizeof(value_type), cudaMemcpyDefault));
     globalTime = omp_get_wtime() - thisTime;
     
-    debug("\nOptimized computation took %s%.5e%s s (σ²≈%.5e) plus %s%.5e%s "
+    debug("Optimized computation took %s%.5e%s s plus %s%.5e%s "
             "for the setup.\n", 
-            YELLOW_TEXT, optTimeMean, NO_COLOR, optTimeVar, YELLOW_TEXT, globalTime,
+            YELLOW_TEXT, optTime, NO_COLOR, YELLOW_TEXT, globalTime,
             NO_COLOR);
-	debug("(opt_time / ref_time) ratio: %.5e\n", optTimeMean/refTimeMean);
-    debug("( opt_var / ref_var ) ratio: %.5e\n", optTimeVar/refTimeVar);
     debug("Rough calculations time speedup: %s%.2fx%s\n",
-          BLUE_TEXT, (refTimeMean)/(optTimeMean), NO_COLOR);
+          BLUE_TEXT, (refTimeMean)/(optTime), NO_COLOR);
     debug("Rough wall time speedup: %s%.2fx%s\n",
-          BLUE_TEXT, (refTimeMean+cpuTime)/(optTimeMean+globalTime), NO_COLOR);
+          BLUE_TEXT, (refTimeMean+cpuTime)/(optTime+globalTime), NO_COLOR);
  
     /* Correction using the previously loaded correction vector */
     debug("Correction using the given vector and an error of %.0e\n", ERROR);

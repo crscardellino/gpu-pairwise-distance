@@ -6,7 +6,7 @@ CFLAGS+=-DTHP # turn on hugepages
 
 # Device compiler
 CUC=/opt/cuda/7.5/bin/nvcc
-CUCFLAGS=-O -I/opt/cuda/7.5/samples/common/inc -arch=sm_35 --prec-div=true --prec-sqrt=true
+CUCFLAGS=-O -I/opt/cuda/7.5/samples/common/inc -arch=sm_52 --prec-div=true --prec-sqrt=true
 CUCFLAGS+=-D_POSIX_C_SOURCE # avoid "fileno" warnings due to c99 standard
 CUCFLAGS+=-DDEBUG # turn debug messages on
 CUCFLAGS+=-DTHP # turn on hugepages
