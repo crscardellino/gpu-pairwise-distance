@@ -12,5 +12,5 @@ item_cosine_similarity: item_cosine_similarity.o hugepages/thp.o
 	$(CC) $(CFLAGS) -o $@  $^ $(LDFLAGS)
 
 clean:
-	rm -f *.o item_cosine_similarity
+	rm -f *.o hugepages/*.o item_cosine_similarity
 .PHONY: clean
