@@ -14,15 +14,13 @@
  * Operations for loading matrices and vectors *
  **********************************************/
 
-/* Load the ratings from a csv file with the format USERID, ITEMID, RATING */
-static void load_ratings_from_csv(
+/* Load the ratings from a mtx file */
+static void load_ratings_from_mtx(
     const char *fname,
     int *ratings,
     Dataset dataset)
 {
-    char buffer[20];
-    char *record, *line;
-    unsigned int i=0, j=0, irecord=0;
+    int i=0, row=0, col=0, rating=0;
     FILE *fstream = fopen(fname, "r");
 
     if (fstream == NULL) {
@@ -30,21 +28,25 @@ static void load_ratings_from_csv(
         exit(EXIT_FAILURE);
     }
 
-    while((line = fgets(buffer, sizeof(buffer), fstream)) != NULL){
-        record = strtok(line, ",");
-        for(j=0; j<RATINGS_OFFSET; j++) {
-            irecord = (unsigned int) atoi(record);
+    if(fscanf(fstream, "%d %d %d", &dataset->items, 
+                &dataset->users, &dataset->size) != 3) {
+        fprintf(stderr, "The file is not valid\n");
+        exit(EXIT_FAILURE);
+    }
 
-            if (j == 0) {
-                dataset->users = max(dataset->users, irecord);
-            } else if (j == 1) {
-                dataset->items = max(dataset->items, irecord);
-            }
-
-            ratings[i * RATINGS_OFFSET + j] = (j==2) ? irecord : irecord - 1;
-            record = strtok(NULL, ",");
+    ratings = (int *) alloc(dataset->size * RATINGS_OFFSET, sizeof(int));
+    assert(ratings);
+ 
+    for (i = 0; id < dataset->size; ++i) {
+        if(fscanf(fstream, "%d %d %d", &row, &col, &rating) != 3)
+        {
+            fprintf(stderr, "The file is not valid\n");
+            exit(EXIT_FAILURE);
         }
-        i++;
+
+        ratings[i * RATINGS_OFFSET + 0] = row - 1;
+        ratings[i * RATINGS_OFFSET + 1] = col - 1;
+        ratings[i * RATINGS_OFFSET + 2] = rating;
     }
 
     fclose(fstream);
@@ -66,7 +68,11 @@ static void load_correction_vector(
     }   
     
     for(i = 0; i < vector_size; i++) {
+#ifdef DOUBLE
         read = fscanf(fstream, "%le", &correction_vector[i]);
+#else
+        read = fscanf(fstream, "%e", &correction_vector[i]);
+#endif
         if(read == EOF) {
             fprintf(stderr, "Error while reading file %s in element # %d\n", 
                     fname, i);
@@ -151,32 +157,28 @@ int main(int argc, char **argv) {
     int *ratings, *item_user_matrix; 
     value_type *similarity_matrix, *correction_vector;
 
-    if (argc < 4 || argc > 5) {
+    if (argc < 3 || argc > 4) {
         fprintf(stderr, 
-            "usage: ./item_cosine_similarity <user_item_rating_csv>\
-            <correction_vector_vec> <no_of_ratings> [<no_of_iterations>]\n"
+            "usage: ./item_cosine_similarity <user_item_rating_mtx>\
+            <correction_vector_vec> [<no_of_iterations>]\n"
         );
         exit(EXIT_FAILURE);
     }
-
+    
+    /* start measuring time */
     thisTime = omp_get_wtime();
 
     /* Initialize the dataset structure. Useful for holding the size 
        of the dataset */
     dataset = (Dataset) malloc (sizeof(struct sDataset));
     assert(dataset);
-    dataset->size = (unsigned int) atoi(argv[3]);
-    dataset->users = 0;
-    dataset->items = 0;
 
     /* Useful for removing noise given by the usage of the machine */
-    num_iterations = (argc == 5) ? atoi(argv[4]) : 1;
+    num_iterations = (argc == 4) ? atoi(argv[3]) : 1;
  
-    /* Load ratings dataset from the given csv file */
-    ratings = (int *) alloc(dataset->size * RATINGS_OFFSET, sizeof(int));
-    assert(ratings);
+    /* Load ratings dataset from the given mtx file */
     debug("Loading ratings matrix from file %s\n", argv[1]);
-    load_ratings_from_csv(argv[1], ratings, dataset);
+    load_ratings_from_mtx(argv[1], ratings, dataset);
     debug("Successfully loaded %d total ratings of %d users and %d items\n", 
             dataset->size, dataset->users, dataset->items);
 

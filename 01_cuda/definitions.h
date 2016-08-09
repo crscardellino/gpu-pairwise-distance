@@ -4,22 +4,6 @@
 #define RATINGS_OFFSET 3
 #define BLOCK_SIZE 32
 
-/* Return the max between two values */
-#define max(a, b) ((a >= b) ? a : b)
-
-/* Struct to hold information regarding a dataset (size, no of users and no of items) */
-typedef struct sDataset {
-    unsigned int size;
-    unsigned int users;
-    unsigned int items;
-} * Dataset;
-
-/* Value type for the calculations */
-typedef double value_type;
-
-/* Result misscalculation tolerance */
-#define ERROR 1e-10
-
 /* Debug messages printing */
 #ifdef DEBUG
 # define debug(format,...) {                 \
@@ -47,5 +31,29 @@ typedef double value_type;
 #define  BLUE_TEXT      "\33[22;34m"
 #define  BLUE_B_TEXT    "\33[1;34m"
 #define  NO_COLOR       "\33[0m"
+
+/* Return the max between two values */
+#define max(a, b) ((a >= b) ? a : b)
+
+/* Result misscalculation tolerance */
+#ifdef DOUBLE
+# define ERROR 1e-10
+#else
+# define ERROR 1e-5
+#endif
+
+/* Value type for the calculations */
+#ifdef DOUBLE
+ typedef double value_type;
+#else
+ typedef float value_type;
+#endif
+
+/* Struct to hold information regarding a dataset (size, items (rows) and users (cols)) */
+typedef struct sDataset {
+    int size;
+    int items;
+    int users;
+} * Dataset;
 
 #endif /* __DEFINITIONS_H */
