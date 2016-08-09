@@ -146,7 +146,7 @@ static void item_cosine_similarity(
 int main(int argc, char **argv) {
     bool correct=true;
     int i, num_iterations, distance_matrix_size;
-    value_type startTime=0., 
+    double startTime=0., 
            currentTime=0., 
            timeMean=0., 
            timeVar=0., 
@@ -225,11 +225,22 @@ int main(int argc, char **argv) {
 
     /* Correction using the previously loaded correction vector */
     debug("Correction using the given vector and an error of %.0e\n", ERROR);
-    for(i = 0; i < distance_matrix_size && correct; i++) {
-        correct = fabs(similarity_matrix[i] - correction_vector[i]) < ERROR 
-            ? true : false;
+    for(i = 0; i < distance_matrix_size; i++) {
+        if(fabs(similarity_matrix[i] - correction_vector[i]) >= ERROR) {
+            correct = false;
+#ifdef DEBUG
+            fprintf(stdout, "%d %.5e %.5e %.5e\n", i, similarity_matrix[i], 
+                    correction_vector[i], 
+                    fabs(similarity_matrix[i] - correction_vector[i]));
+            fflush(stdout);
+#endif
+        }
     }
-    debug("Calculations were %s\n", correct ? "CORRECT" : "WRONG !!!");
+    if(correct){
+        debug("Calculations were %s%s%s\n", GREEN_TEXT, "CORRECT", NO_COLOR);
+    } else {
+        debug("Calculations were %s%s%s\n", RED_TEXT, "WRONG", NO_COLOR);
+    }
 
     free(dataset);
     free(ratings);
