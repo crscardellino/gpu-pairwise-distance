@@ -21,7 +21,7 @@
 /* Load the ratings from a mtx file */
 static void load_ratings_from_mtx(
     const char *fname,
-    int *ratings,
+    int **ratings,
     Dataset dataset)
 {
     int i=0, row=0, col=0, rating=0;
@@ -38,19 +38,19 @@ static void load_ratings_from_mtx(
         exit(EXIT_FAILURE);
     }
 
-    ratings = (int *) alloc(dataset->size * RATINGS_OFFSET, sizeof(int));
-    assert(ratings);
+    *ratings = (int *) alloc(dataset->size * RATINGS_OFFSET, sizeof(int));
+    assert(*ratings);
  
-    for (i = 0; id < dataset->size; ++i) {
+    for (i = 0; i < dataset->size; ++i) {
         if(fscanf(fstream, "%d %d %d", &row, &col, &rating) != 3)
         {
             fprintf(stderr, "The file is not valid\n");
             exit(EXIT_FAILURE);
         }
 
-        ratings[i * RATINGS_OFFSET + 0] = row - 1;
-        ratings[i * RATINGS_OFFSET + 1] = col - 1;
-        ratings[i * RATINGS_OFFSET + 2] = rating;
+        (*ratings)[i * RATINGS_OFFSET] = row - 1;
+        (*ratings)[i * RATINGS_OFFSET + 1] = col - 1;
+        (*ratings)[i * RATINGS_OFFSET + 2] = rating;
     }
 
     fclose(fstream);
@@ -95,12 +95,12 @@ static void load_item_user_matrix(
     const int *ratings,
     const Dataset dataset) 
 {
-    unsigned int i; 
+    int i; 
     int user, item, rating;
 
     for(i=0; i < dataset->size; i++) {
-        user = ratings[i * RATINGS_OFFSET];
-        item = ratings[i * RATINGS_OFFSET + 1];
+        item = ratings[i * RATINGS_OFFSET];
+        user = ratings[i * RATINGS_OFFSET + 1];
         rating = ratings[i * RATINGS_OFFSET + 2];
         
         item_user_matrix[item * dataset->users + user] = rating;
@@ -119,7 +119,7 @@ static void item_cosine_similarity(
     value_type *similarity_matrix,
     const Dataset dataset)
 {
-    unsigned int i, u, v, uv, ui, vi;
+    int i, u, v, uv, ui, vi;
     value_type num, uden, vden;
 
     for(u=0; u < dataset->items; u++) {
@@ -181,7 +181,7 @@ __global__ void item_cosine_similarity_cuda(
 
 int main(int argc, char **argv) {
     bool correct=true;
-    unsigned int i, num_iterations, distance_matrix_size;
+    int i, num_iterations, distance_matrix_size;
     double startTime=0., 
            currentTime=0., 
            refTimeMean=0., 
@@ -191,13 +191,13 @@ int main(int argc, char **argv) {
            globalTime=0.,
            thisTime=0.;
     Dataset dataset;
-    int *ratings, *item_user_matrix, *d_item_user_matrix; 
-    value_type *correction_vector, *similarity_matrix, *d_similarity_matrix;
+    int *ratings = NULL, *item_user_matrix = NULL, *d_item_user_matrix = NULL; 
+    value_type *correction_vector= NULL, *similarity_matrix = NULL, *d_similarity_matrix = NULL;
 
-    if (argc < 4 || argc > 5) {
+    if (argc < 3 || argc > 4) {
         fprintf(stderr, 
             "usage: ./item_cosine_similarity <user_item_rating_mtx>\
-            <correction_vector_vec> <no_of_ratings> [<no_of_iterations>]\n"
+            <correction_vector_vec> [<no_of_iterations>]\n"
         );
         exit(EXIT_FAILURE);
     }
@@ -215,7 +215,7 @@ int main(int argc, char **argv) {
  
     /* Load ratings dataset from the given mtx file */
     debug("Loading ratings matrix from file %s\n", argv[1]);
-    load_ratings_from_mtx(argv[1], ratings, dataset);
+    load_ratings_from_mtx(argv[1], &ratings, dataset);
     debug("Successfully loaded %d total ratings of %d users and %d items\n", 
             dataset->size, dataset->users, dataset->items);
 
