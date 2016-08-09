@@ -49,7 +49,11 @@
 # Project specific
 item_cosine_similarity
 item_cosine_similarity_cuda
+*.log
+
+# Data
+*.tar.xz
+*.tar.gz
 *.csv
 *.mtx
 *.vec
-*.log
