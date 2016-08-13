@@ -50,8 +50,7 @@
 #endif
 
 /* Struct that holds the info of a sparse matrix in csr format */
-typedef struct tSparseMatrix {
-    int nnz;
+typedef struct sSparseMatrix {
     int nrows;
     int ncols;
     value_type * data;

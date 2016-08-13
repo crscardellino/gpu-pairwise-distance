@@ -298,7 +298,7 @@ int main(int argc, char **argv) {
     thisTime = omp_get_wtime();
     checkCudaErrors(cudaMemcpy(similarity_matrix, d_similarity_matrix, 
                 distance_matrix_size * sizeof(value_type), cudaMemcpyDefault));
-    globalTime = omp_get_wtime() - thisTime;
+    globalTime += omp_get_wtime() - thisTime;
     
     debug("Optimized computation took %s%.5e%s s plus %s%.5e%s "
             "for the setup.\n", 
