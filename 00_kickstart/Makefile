@@ -4,6 +4,7 @@ CFLAGS+=-D_POSIX_C_SOURCE # avoid "fileno" warnings due to c99 standard
 CFLAGS+=-DDEBUG # turn debug messages on
 CFLAGS+=-DTHP # turn on hugepages
 CFLAGS+=-DDOUBLE # turn on double precision
+CFLAGS+=-fopenmp
 
 LDFLAGS=-lm -lgomp
 

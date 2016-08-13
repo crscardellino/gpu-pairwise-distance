@@ -119,17 +119,15 @@ static void item_cosine_similarity(
     value_type *similarity_matrix,
     const Dataset dataset)
 {
-    int i, u, v, uv, ui, vi;
-    value_type num, uden, vden;
+#pragma omp parallel for default(shared)
+    for(int u=0; u < dataset->items; u++) {
+#pragma omp parallel for default(shared)
+        for(int v=u; v < dataset->items; v++) {
+            int ui, vi;
+            int uv = (dataset->items * u) + v - u * (u+1) / 2; 
+            value_type num=0., uden=0., vden=0.;
 
-    for(u=0; u < dataset->items; u++) {
-        for(v=u; v < dataset->items; v++) {
-            num=0.;
-            uden=0.;
-            vden=0.;
-            uv = (dataset->items * u) + v - u * (u+1) / 2; 
-
-            for(i = 0; i < dataset->users; i++) {
+            for(int i = 0; i < dataset->users; i++) {
                 ui = u * dataset->users + i;
                 vi = v * dataset->users + i;
                 num += (value_type) (item_user_matrix[ui] * item_user_matrix[vi]);

@@ -111,18 +111,14 @@ static inline void item_cosine_similarity(
     const SparseMatrix dataset,
     value_type *similarity_matrix)
 {
-    int i, j, u, v, uv;
-    value_type num, uden, vden;
-
-    for(u=0; u < dataset->nrows; u++) {
-        for(v=u; v < dataset->nrows; v++) {
-            num=0.;
-            uden=0.;
-            vden=0.;
-            uv = (dataset->nrows * u) + v - u * (u+1) / 2;
-
-            i = dataset->rowPtr[u];
-            j = dataset->rowPtr[v];
+#pragma omp parallel for default(shared)
+    for(int u=0; u < dataset->nrows; u++) {
+#pragma omp parallel for default(shared)
+        for(int v=u; v < dataset->nrows; v++) {
+            int i = dataset->rowPtr[u];
+            int j = dataset->rowPtr[v];
+            int uv = (dataset->nrows * u) + v - u * (u+1) / 2; 
+            value_type num=0., uden=0., vden=0.;
  
             while(i < dataset->rowPtr[u+1] && j < dataset->rowPtr[v+1]) {
                 if(dataset->colInd[i] == dataset->colInd[j])

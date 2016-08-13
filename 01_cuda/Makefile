@@ -11,6 +11,7 @@ CXXFLAGS=-Wall -Wextra -march=native -O3
 CXXFLAGS+=-Wno-variadic-macros  # These are standard from C++11 onwards
 CXXFLAGS+=-Wno-long-long  # These are standard from C++11 onwards
 CXXFLAGS+=-Wno-unused-function
+CXXFLAGS+=-fopenmp
 
 LDFLAGS=-lm -lgomp
 
