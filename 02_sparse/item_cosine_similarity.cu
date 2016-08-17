@@ -18,13 +18,13 @@
  * Operations for loading matrices and vectors *
  **********************************************/
 
-/* Load the ratings from a mtx file */
-static void load_ratings_from_mtx(
+/* Load the ratings matrix as a sparse CSR matrix */
+static inline int load_ratings_from_mtx(
     const char *fname,
-    int **ratings,
-    Dataset dataset)
+    SparseMatrix dataset)
 {
-    int i=0, row=0, col=0, rating=0;
+    int i=0, row=0, col=0, nnz=0;
+    value_type rating=0.;
     FILE *fstream = fopen(fname, "r");
 
     if (fstream == NULL) {
@@ -32,33 +32,45 @@ static void load_ratings_from_mtx(
         exit(EXIT_FAILURE);
     }
 
-    if(fscanf(fstream, "%d %d %d", &dataset->items, 
-                &dataset->users, &dataset->size) != 3) {
+    if(fscanf(fstream, "%d %d %d", &dataset->nrows, 
+                &dataset->ncols, &nnz) != 3) {
         fprintf(stderr, "The file is not valid\n");
         exit(EXIT_FAILURE);
     }
 
-    *ratings = (int *) alloc(dataset->size * RATINGS_OFFSET, sizeof(int));
-    assert(*ratings);
- 
-    for (i = 0; i < dataset->size; ++i) {
-        if(fscanf(fstream, "%d %d %d", &row, &col, &rating) != 3)
+    dataset->data = (value_type *) alloc(nnz, sizeof(value_type));
+    dataset->colInd = (int *) alloc(nnz, sizeof(int));
+    dataset->rowPtr = (int *) alloc((dataset->nrows + 1), sizeof(int));
+    assert(dataset->data && dataset->colInd && dataset->rowPtr);
+    memset(dataset->rowPtr, 0, (dataset->nrows + 1) * sizeof(int));
+
+    for (i = 0; i < nnz; ++i) {
+#ifdef DOUBLE
+        if(fscanf(fstream, "%d %d %lf", &row, &col, &rating) != 3)
+#else
+        if(fscanf(fstream, "%d %d %f", &row, &col, &rating) != 3)
+#endif
         {
             fprintf(stderr, "The file is not valid\n");
             exit(EXIT_FAILURE);
         }
 
-        (*ratings)[i * RATINGS_OFFSET] = row - 1;
-        (*ratings)[i * RATINGS_OFFSET + 1] = col - 1;
-        (*ratings)[i * RATINGS_OFFSET + 2] = rating;
+        dataset->data[i] = rating;
+        dataset->colInd[i] = col - 1;
+        dataset->rowPtr[row] += 1;
     }
+    
+    for(row = 1; row < dataset->nrows + 1; ++row)
+        dataset->rowPtr[row] += dataset->rowPtr[row-1];
 
     fclose(fstream);
+
+    return nnz;
 } 
 
 
 /* Load the correction vector from the given file */
-static void load_correction_vector(
+static inline void load_correction_vector(
     const char *fname,
     value_type *correction_vector,
     const int vector_size)
@@ -89,50 +101,40 @@ static void load_correction_vector(
 }
 
 
-/* Load the ratings matrix to a item/user matrix */
-static void load_item_user_matrix(
-    int *item_user_matrix, 
-    const int *ratings,
-    const Dataset dataset) 
-{
-    int i; 
-    int user, item, rating;
-
-    for(i=0; i < dataset->size; i++) {
-        item = ratings[i * RATINGS_OFFSET];
-        user = ratings[i * RATINGS_OFFSET + 1];
-        rating = ratings[i * RATINGS_OFFSET + 2];
-        
-        item_user_matrix[item * dataset->users + user] = rating;
-    }
-}
-
-
 /************************************
  * Cosine similarity operations CPU *
  ***********************************/
 
 /* Returns the vector representing the upper side of the similarity matrix 
  * by measuring cosine similarity pairwise for each row of the item/user matrix */
-static void item_cosine_similarity(
-    const int *item_user_matrix,
-    value_type *similarity_matrix,
-    const Dataset dataset)
+static inline void item_cosine_similarity(
+    const SparseMatrix dataset,
+    value_type *similarity_matrix)
 {
 #pragma omp parallel for default(shared)
-    for(int u=0; u < dataset->items; u++) {
+    for(int u=0; u < dataset->nrows; u++) {
 #pragma omp parallel for default(shared)
-        for(int v=u; v < dataset->items; v++) {
-            int ui, vi;
-            int uv = (dataset->items * u) + v - u * (u+1) / 2; 
+        for(int v=u; v < dataset->nrows; v++) {
+            int i = dataset->rowPtr[u];
+            int j = dataset->rowPtr[v];
+            int uv = (dataset->nrows * u) + v - u * (u+1) / 2; 
             value_type num=0., uden=0., vden=0.;
+ 
+            while(i < dataset->rowPtr[u+1] && j < dataset->rowPtr[v+1]) {
+                if(dataset->colInd[i] == dataset->colInd[j])
+                    num += (value_type) (dataset->data[i] * dataset->data[j]);
 
-            for(int i = 0; i < dataset->users; i++) {
-                ui = u * dataset->users + i;
-                vi = v * dataset->users + i;
-                num += (value_type) (item_user_matrix[ui] * item_user_matrix[vi]);
-                uden += (value_type) (item_user_matrix[ui] * item_user_matrix[ui]);
-                vden += (value_type) (item_user_matrix[vi] * item_user_matrix[vi]);
+                if(dataset->colInd[i] <= dataset->colInd[j]) i++;
+
+                if(dataset->colInd[j] < dataset->colInd[i]) j++;
+            }
+
+            for(i = dataset->rowPtr[u]; i < dataset->rowPtr[u+1]; i++) {
+                uden += (value_type) (dataset->data[i] * dataset->data[i]);
+            }
+
+            for(i = dataset->rowPtr[v]; i < dataset->rowPtr[v+1]; i++) {
+                vden += (value_type) (dataset->data[i] * dataset->data[i]);
             }
  
             similarity_matrix[uv] = num / (sqrt(uden) * sqrt(vden));
@@ -147,26 +149,39 @@ static void item_cosine_similarity(
 
 /* CUDA version. Each thread is in charge of a pair of rows */
 __global__ void item_cosine_similarity_cuda(
-    const int *item_user_matrix,
-    value_type *similarity_matrix,
-    const int items,
-    const int users)
+    const value_type *data,
+    const int *colInd,
+    const int *rowPtr,
+    const int nrows,
+    value_type *similarity_matrix)
 {
-    int i, ui, vi, uv;
+    int i, j, uv;
     int u = blockIdx.y * blockDim.y + threadIdx.y;
     int v = blockIdx.x * blockDim.x + threadIdx.x;
     value_type num=0., uden=0., vden=0.;
 
-    uv = items * u + v - u * (u + 1) / 2;
+    uv = nrows * u + v - u * (u + 1) / 2;
 
-    if(v < u || u >= items || v >= items) return;
+    if(v < u || u >= nrows || v >= nrows) return;
 
-    for(i=0; i<users; i++) {
-        ui = u * users + i;
-        vi = v * users + i;
-        num += (value_type) (item_user_matrix[ui] * item_user_matrix[vi]);
-        uden += (value_type) (item_user_matrix[ui] * item_user_matrix[ui]);
-        vden += (value_type) (item_user_matrix[vi] * item_user_matrix[vi]);
+    i = rowPtr[u];
+    j = rowPtr[v];
+
+    while(i < rowPtr[u+1] && j < rowPtr[v+1]) {
+        if(colInd[i] == colInd[j])
+            num += (value_type) (data[i] * data[j]);
+
+        if(colInd[i] <= colInd[j]) i++;
+
+        if(colInd[j] < colInd[i]) j++;
+    }
+
+    for(i = rowPtr[u]; i < rowPtr[u+1]; i++) {
+        uden += (value_type) (data[i] * data[i]);
+    }
+
+    for(i = rowPtr[v]; i < rowPtr[v+1]; i++) {
+        vden += (value_type) (data[i] * data[i]);
     }
 
     similarity_matrix[uv] = num * rsqrt(uden) * rsqrt(vden);
@@ -179,18 +194,18 @@ __global__ void item_cosine_similarity_cuda(
 
 int main(int argc, char **argv) {
     bool correct=true;
-    int i, num_iterations, distance_matrix_size;
+    int i, num_iterations, distance_matrix_size, nnz;
     double startTime=0., 
            currentTime=0., 
            refTimeMean=0., 
            optTime=0., 
            previousMean=0.,
-		   cpuTime=0.,
+           cpuTime=0.,
            globalTime=0.,
            thisTime=0.;
-    Dataset dataset;
-    int *ratings = NULL, *item_user_matrix = NULL, *d_item_user_matrix = NULL; 
-    value_type *correction_vector= NULL, *similarity_matrix = NULL, *d_similarity_matrix = NULL;
+    SparseMatrix dataset;
+    int *d_colInd, *d_rowPtr;
+    value_type *correction_vector, *similarity_matrix, *d_data, *d_similarity_matrix;
 
     if (argc < 3 || argc > 4) {
         fprintf(stderr, 
@@ -203,42 +218,34 @@ int main(int argc, char **argv) {
     /* start measuring time */
     thisTime = omp_get_wtime();
 
-    /* Initialize the dataset structure. Useful for holding the size 
-       of the dataset */
-    dataset = (Dataset) malloc (sizeof(struct sDataset));
-    assert(dataset);
-
     /* Useful for removing noise given by the usage of the machine */
     num_iterations = (argc == 4) ? atoi(argv[3]) : 1;
+
+    /* Reserve space for the SparseMatrix basic structure */
+    dataset = (SparseMatrix) malloc(sizeof(struct sSparseMatrix));
  
     /* Load ratings dataset from the given mtx file */
     debug("Loading ratings matrix from file %s\n", argv[1]);
-    load_ratings_from_mtx(argv[1], &ratings, dataset);
+    nnz = load_ratings_from_mtx(argv[1], dataset);
     debug("Successfully loaded %d total ratings of %d users and %d items\n", 
-            dataset->size, dataset->users, dataset->items);
+            nnz, dataset->ncols, dataset->nrows);
 
     /* We use a vector (representing the upper side of a triangular matrix) 
        in order to make the correction */
-    distance_matrix_size = dataset->items * (dataset->items + 1) / 2;
+    distance_matrix_size = dataset->nrows * (dataset->nrows + 1) / 2;
     correction_vector = (value_type *) alloc(distance_matrix_size, sizeof(value_type));
     assert(correction_vector);
     debug("Loding the correction vector from file %s\n", argv[2]);
     load_correction_vector(argv[2], correction_vector, distance_matrix_size);
  
-    /* Create the item/user matrix from the previously loaded ratings dataset */
-    item_user_matrix = (int *) alloc(dataset->items * dataset->users, sizeof(int));
-    assert(item_user_matrix);
-    debug("Loading item/user matrix of size %dx%d\n", dataset->items, dataset->users);
-    load_item_user_matrix(item_user_matrix, ratings, dataset);
-
     /* Calculate the similarity matrix row-wise from the item/user matrix. 
      * The matrix is represented by a vector of the upper triangular side.
      * This is what I want to optimize */
     similarity_matrix = (value_type *) alloc(distance_matrix_size, sizeof(value_type));
     debug("Calculating items cosine similarity matrices of %d elements\n", 
-            dataset->items);
+            dataset->nrows);
 
-	cpuTime = omp_get_wtime() - thisTime;
+    cpuTime = omp_get_wtime() - thisTime;
     globalTime = cpuTime;
 
     debug("Reference computation will run %d iterations\n", num_iterations);
@@ -249,7 +256,7 @@ int main(int argc, char **argv) {
         startTime = omp_get_wtime();
  
         /*  What I want to optimize */
-        item_cosine_similarity(item_user_matrix, similarity_matrix, dataset);
+        item_cosine_similarity(dataset, similarity_matrix);
         
         currentTime = omp_get_wtime() - startTime;
         previousMean = refTimeMean;
@@ -264,16 +271,24 @@ int main(int argc, char **argv) {
     thisTime = omp_get_wtime();
 
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
-    dim3 dimGrid((dataset->items + dimBlock.x - 1)/dimBlock.x,
-            (dataset->items + dimBlock.y - 1)/dimBlock.y, 1);
-    checkCudaErrors(cudaMalloc(&d_item_user_matrix, 
-                dataset->items * dataset->users * sizeof(int)));
+    dim3 dimGrid((dataset->nrows + dimBlock.x - 1)/dimBlock.x,
+            (dataset->nrows + dimBlock.y - 1)/dimBlock.y, 1);
+
+    checkCudaErrors(cudaMalloc(&d_data, nnz * sizeof(value_type)));
+    checkCudaErrors(cudaMalloc(&d_colInd, nnz * sizeof(int)));
+    checkCudaErrors(cudaMalloc(&d_rowPtr, (dataset->nrows + 1) * sizeof(int)));
     checkCudaErrors(cudaMalloc(&d_similarity_matrix, 
                 distance_matrix_size * sizeof(value_type)));
-    assert(d_item_user_matrix && d_similarity_matrix);
-    checkCudaErrors(cudaMemcpy(d_item_user_matrix, item_user_matrix, 
-                dataset->items * dataset->users * sizeof(int), 
+    assert(d_data && d_colInd && d_rowPtr && d_similarity_matrix);
+ 
+    checkCudaErrors(cudaMemcpy(d_data, dataset->data, nnz * sizeof(value_type), 
                 cudaMemcpyDefault));
+    checkCudaErrors(cudaMemcpy(d_colInd, dataset->colInd, nnz * sizeof(int),
+                cudaMemcpyDefault));
+    checkCudaErrors(cudaMemcpy(d_rowPtr, dataset->rowPtr, 
+                (dataset->nrows + 1) * sizeof(int), cudaMemcpyDefault));
+    checkCudaErrors(cudaMemset(d_similarity_matrix, 0.0f, 
+                distance_matrix_size * sizeof(value_type)));
 
     globalTime += omp_get_wtime() - thisTime;
 
@@ -284,10 +299,8 @@ int main(int argc, char **argv) {
     startTime = omp_get_wtime();
 
     /* Run cuda kernel */
-    checkCudaErrors(cudaMemset(d_similarity_matrix, 0.0f, 
-                distance_matrix_size * sizeof(value_type)));
-    item_cosine_similarity_cuda<<< dimGrid, dimBlock >>>(d_item_user_matrix, 
-            d_similarity_matrix, (int) dataset->items, (int) dataset->users);
+    item_cosine_similarity_cuda<<< dimGrid, dimBlock >>>(d_data,
+            d_colInd, d_rowPtr, dataset->nrows, d_similarity_matrix);
     getLastCudaError("item_cosine_similarity_cuda() kernel failed");
     checkCudaErrors(cudaDeviceSynchronize());
  
@@ -326,13 +339,16 @@ int main(int argc, char **argv) {
         debug("Calculations were %s%s%s\n", RED_TEXT, "WRONG", NO_COLOR);
     }
 
+    free(dataset->data);
+    free(dataset->colInd);
+    free(dataset->rowPtr);
     free(dataset);
-    free(ratings);
-    free(item_user_matrix);
     free(similarity_matrix);
     free(correction_vector);
-	checkCudaErrors(cudaFree(d_item_user_matrix));
-	checkCudaErrors(cudaFree(d_similarity_matrix));
+    checkCudaErrors(cudaFree(d_data));
+    checkCudaErrors(cudaFree(d_colInd));
+    checkCudaErrors(cudaFree(d_rowPtr));
+    checkCudaErrors(cudaFree(d_similarity_matrix));
 
     return EXIT_SUCCESS;
 }
