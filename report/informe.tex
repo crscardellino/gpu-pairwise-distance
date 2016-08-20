@@ -1,0 +1,230 @@
+\documentclass[11pt, a4paper]{article}
+
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+
+% Margin set to a4wide
+\usepackage{geometry}
+\usepackage{layout}
+
+\geometry{
+  left=2.5cm,
+  right=2.5cm,
+  top=3.5cm,
+  bottom=3cm
+}
+
+\usepackage{amsmath}
+\usepackage{amstext}
+\usepackage{amssymb}
+\usepackage{hyperref}
+
+\linespread{1.3}
+
+\title{
+    \large{Computación Paralela: Trabajo Final}\\
+    \huge{Similitud Coseno Punto a Punto}
+}
+
+\author{Cristian A. Cardellino}
+
+\date{12 de Agosto de 2015}
+
+\begin{document}
+  \maketitle
+
+  \section{Introducción}
+
+  El presente informe describe el trabajo final realizado para la cátedra de
+  posgrado ``Computación Paralela''. El proyecto elegido fue la paralelización
+  del algoritmo de {\em similitud coseno punto a punto} (pairwise cosine
+  similarity) de una matriz.
+  
+  A grandes rasgos, el algoritmo toma una matriz y compara cada fila de esta
+  contra todas las demás filas utilizando similitud coseno entre los vectores
+  conformados por las filas. Luego devuelve una matriz de distancia con las
+  distancias de cada par de filas en la matriz.
+
+  La similitud coseno es una medida de la similitud existente entre dos
+  vectores, en un espacio vectorial que posee producto punto, con el que se
+  evalúa el valor del coseno del ángulo comprendido entre ellos. Esta medida
+  proporciona un valor igual a 1 si el ángulo es cero, es decir ambos vectores
+  apuntan al mismo lugar. Ante cualquier ángulo existente entre los vectores la
+  medida arrojaría un valor menor a uno. En caso de vectores ortogonales la
+  similitud es nula. Finalmente, si los vectores son opuestos, la medida sería
+  -1.
+
+  La similitud coseno puede ser aplicada a varias dimensiones, y es más
+  comúnmente utilizada en espacios de alta dimensionalidad, e.g. búsqueda y
+  recuperación de información (information retrieval) o minería de textos (text
+  mining). 
+
+  La similitud punto a punto es utilizada como técnica en sistemas de
+  recomendación (recommender systems), particularmente en filtrado colaborativo
+  (collaborative filtering), donde una matriz representa valoraciones
+  (ratings) que ciertos usuarios les dan a ciertos items y esto a su vez es
+  utilizado para recomendar dichos items a otros usuarios basándose en la
+  similitud que tienen valorando items.
+
+  La paralelización del presente problema se da en que la similitud entre dos
+  filas de la matriz es completamente independiente por cada par de filas que
+  haya en la matriz. No obstante, realizar este trabajo secuencialmente es del
+  orden $\mathcal{O}(n^{2})$, donde $n$ es la cantidad de filas de la matriz.
+
+  % TODO: Revisar outline
+%  El informe se estructura de la siguiente manera: en la
+%  Sección~\ref{sec:problema} se describe el problema particular sobre el que se
+%  trabajaron las técnicas de optimización, se presentan los datos utilizados y
+%  la manera en que se preprocesaron y como se representan dentro del problema;
+%  la Sección~\ref{sec:experimentos} describe la configuración de los
+%  experimentos, detalla el hardware utilizado en los mismos, se describe en
+%  mayor detalle las distintas mejoras realizadas y los problemas con los
+%  encontrados al realizarlas y se presentan las métricas y mediciones
+%  utilizadas; la Sección~\ref{sec:resultados} muestra los resultados de los
+%  experimentos y hace un análisis general de los mismos; finalmente el reporte
+%  concluye en la Sección~\ref{sec:conclusiones}, donde se hace una observación
+%  general del problema y los objetivos alcanzados.
+ 
+  \section{Descripción del problema, datos y representación}\label{sec:problema}
+
+  \subsection{Filtrado colaborativo basado en items}
+
+  Los sistemas de recomendación (recommender systems) buscan predecir las
+  preferencias de ciertos usuarios sobre ciertos items. En los últimos años se
+  ha visto que estos sistemas se volvieron extremadamente comunes en distintas
+  áreas como libros, películas, música, y productos en general. Grandes
+  jugadores del medio del e-commerce o que brindan servicios de streaming hacen
+  uso de estos sistemas para brindar una mejor experiencia de usuario (Netflix,
+  Amazon, Spotify, entre otros).
+
+  Dentro de estos sistemas, una técnica muy utilizada es el filtrado
+  colaborativo (collaborative filtering) cuya idea parte de que usuarios
+  similares tendrán gustos similares. El filtrado colaborativo es un método que
+  busca hacer predicciones automáticas (filtrado) sobre los intereses de un
+  usuario recolectando las preferencias de varios usuarios. La suposición que
+  hace esta técnica es que si un usuario {\it A} tiene una opinión similar a un
+  usuario {\it B} sobre determinado asunto, {\it A} es más probable que tenga
+  una opinión similar a {\it B} en un asunto diferente a que tenga una opinión
+  similar a algún otro usuario aleatorio {\it C}. Esto también es conocido como
+  {\em filtrado colaborativo basado en usuarios} (user-based collaborative
+  filtering) y tiene algunos problemas como:
+
+  \begin{itemize}
+    \item Bajo desempeño cuando hay muchos items pero pocas calificaciones.
+    \item La cantidad de usuarios suele sobrepasar por varias magnitudes al
+        número de items.
+    \item Las preferencias de los usuarios pueden cambiar, lo que implica tener
+        que recalcular todo el sistema.
+  \end{itemize}
+
+  Una variante de la técnica de filtrado colaborativo llamada {\em filtrado
+  colaborativo basado en items}~\cite{linden2001collaborative} (item-based
+  collaborative filtering) fue patentada por Amazon, y resuelve la mayoría de
+  los problemas presentados por el filtrado basado en usuarios, particularmente
+  en sistemas donde hay más cantidad de usuarios que de items. La idea base de
+  esta técnica es recomendar items que sean similares a otros items que el
+  usuario ya calificó positivamente, midiendo la similitud de dichos items. En
+  este proyecto se busca paralelizar y optimizar el código básico que se usa
+  para hacer este filtrado colaborativo basado en items.
+
+  \subsection{Datos utilizados}
+
+  Para el desarrollo del proyecto se optó por datos estándar en la
+  investigación de algoritmos de recomendación:
+  MovieLens~\cite{Harper:2015:MDH:2866565.2827872}, de GroupLens Research. Este
+  consta de distintas valoraciones (ratings) que usuarios del sitio web
+  MovieLens\footnote{\url{http://movielens.org}} hicieron sobre distintas
+  películas.
+
+  GroupLens liberó distintos tamaños de su conjunto de datos para
+  investigación. En este trabajo se hace uso de 4 de ellos:
+
+  \begin{description} 
+      \item[MovieLens 100k Dataset (ML100k)] Consta de 100000 valoraciones
+          realizadas por 943 usuarios sobre 1682 películas.
+      \item[MovieLens 1M Dataset (ML1M)] Consta de 1000209 valoraciones
+          realizadas por 6040 usuarios sobre 3962 películas.
+      \item[MovieLens 10M Dataset (ML10M)] Consta de 10000054 valoraciones
+          realizadas por 69878 usuarios sobre 10677 películas.
+      \item[MovieLens 20M Dataset (ML20M)] Consta de 20000263 valoraciones
+          realizadas por 138493 usuarios sobre 26744 películas.
+  \end{description}
+
+  Las valoraciones de los usuarios están hechas en una escala de 5 estrellas
+  (i.e. del rango [1, 5]), que en el caso de los datos de ML10M y ML20M pueden
+  tener incrementos de media estrella (i.e., en el rango [0.5, 5.0]). Todos los
+  conjuntos establecen que cada usuario valoró un mínimo de 20 películas.
+
+  Los conjuntos ML100k y ML1M no tuvieron que ser modificados debido a que
+  estos identificaron a sus películas y usuarios unívocamente con la cantidad.
+  En el caso de los conjuntos ML10M y ML20M, estos tenían a sus usuarios y
+  películas identificados con más números que la cantidad, por lo que se los
+  preprocesó proyectando los valores de manera que estos fueran unívocos a la
+  cantidad de usuarios/películas.
+
+  \subsection{Representación de los datos}
+
+  Se requiere de dos archivos para hacer funcionar el código: la matriz de
+  valoraciones y la matriz de similitud para corrección. La primera se obtuvo a
+  partir de los datos brindados por MovieLens, la segunda se calculó utilizando
+  la librería de aprendizaje automático de Python ``Scikit
+  Learn''~\cite{scikit-learn}.
+
+  La matriz de valoraciones contiene una fila por cada película y una columna
+  por cada usuario del conjunto de datos.  Cada celda de la matriz representa
+  la cantidad de estrellas que el usuario le dio a la película, siendo este
+  valor igual a cero cuando el usuario no hizo valoración alguna sobre dicha
+  película.
+
+  Debido a que el conjunto de datos establece que cada usuario valoró un mínimo
+  de 20 películas, dejando la mayoría de las películas sin valorar, la matriz
+  final de películas/usuarios es extremadamente rala, llegando a ser los
+  valores no nulos menor al 1\% de la totalidad de la matriz.
+
+  En los primeros experimentos la matriz películas/usuarios era representada
+  por una matriz densa. Sin embargo, era solo viable para los casos de los
+  conjuntos ML100k y ML1M que se podía cargar dicha matriz en memoria sin que
+  afectara gravemente el desempeño de los algoritmos encargados de calcular la
+  similitud coseno. Buscando mejorar este desempeño para conjuntos de datos de
+  mayor tamaño se optó por el uso de representaciones ralas para matrices; y
+  dado que se necesita un acceso rápido a las filas para su comparación se hace
+  uso del formato Yale (o {\em compressed row storage}) para representar las
+  matrices.
+  
+  El archivo con el que se guarda la matriz de valoraciones sigue la base del
+  formato de intercambio {\em Matrix Market}~\cite{Boisvert:aa}. Se usa el
+  formato COO de matrices ralas coordinadas que durante la etapa de carga se
+  transforma en formato Yale. 
+
+  La matriz de corrección tiene la particularidad de ser una {\em matriz de
+  distancia}, lo que quiere decir que es simétrica a través de la diagonal
+  principal. Por lo tanto es suficiente con guardar la mitad triangular
+  superior de la matriz. Para esto se hace uso de la propuesta de James D.
+  McCaffrey: ``Converting a Triangular Matrix to an
+  Array''\footnote{\url{https://jamesmccaffrey.wordpress.com/2010/05/14/converting-a-triangular-matrix-to-an-array/}}.
+
+  \section{Configuración de experimentos}\label{sec:experimentos}
+
+  \subsection{Recursos de hardware}
+
+  % TODO: Describir recursos de hardware luego de tener los experimentos
+ 
+  \subsection{Algoritmos}
+
+  \subsubsection{Algoritmo Base}
+
+  \paragraph{Mejoras}
+
+  \subsection{Métricas}
+
+  \section{Resultados y análisis}\label{sec:resultados}
+
+  % Para 20M no se puede levantar la matriz
+
+  \section{Conclusiones}\label{sec:conclusiones}
+
+  \clearpage
+  \bibliographystyle{abbrv}
+  \bibliography{/Users/crscardellino/Documents/Posgrado/Bibliography/bibliography.bib}
+\end{document}
