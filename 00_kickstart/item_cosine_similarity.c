@@ -17,10 +17,11 @@
 /* Load the ratings from a mtx file */
 static void load_ratings_from_mtx(
     const char *fname,
-    int **ratings,
+    value_type **ratings,
     Dataset dataset)
 {
-    int i=0, row=0, col=0, rating=0;
+    int i=0; 
+    value_type row=0, col=0, rating=0;
     FILE *fstream = fopen(fname, "r");
 
     if (fstream == NULL) {
@@ -34,11 +35,15 @@ static void load_ratings_from_mtx(
         exit(EXIT_FAILURE);
     }
 
-    *ratings = (int *) alloc(dataset->size * RATINGS_OFFSET, sizeof(int));
+    *ratings = (value_type *) alloc(dataset->size * RATINGS_OFFSET, sizeof(value_type));
     assert(*ratings);
  
     for (i = 0; i < dataset->size; ++i) {
-        if(fscanf(fstream, "%d %d %d", &row, &col, &rating) != 3)
+#ifdef DEBUG
+        if(fscanf(fstream, "%lf %lf %lf", &row, &col, &rating) != 3)
+#else
+        if(fscanf(fstream, "%f %f %f", &row, &col, &rating) != 3)
+#endif
         {
             fprintf(stderr, "The file is not valid\n");
             exit(EXIT_FAILURE);
@@ -87,19 +92,18 @@ static void load_correction_vector(
 
 /* Load the ratings matrix to a item/user matrix */
 static void load_item_user_matrix(
-    int *item_user_matrix, 
-    const int *ratings,
+    value_type *item_user_matrix, 
+    const value_type *ratings,
     const Dataset dataset) 
 {
     int i; 
-    int user, item, rating;
+    int user, item;
 
     for(i=0; i < dataset->size; i++) {
-        item = ratings[i * RATINGS_OFFSET];
-        user = ratings[i * RATINGS_OFFSET + 1];
-        rating = ratings[i * RATINGS_OFFSET + 2];
+        item = (int) ratings[i * RATINGS_OFFSET];
+        user = (int) ratings[i * RATINGS_OFFSET + 1];
         
-        item_user_matrix[item * dataset->users + user] = rating;
+        item_user_matrix[item * dataset->users + user] = ratings[i * RATINGS_OFFSET + 2];
     }
 }
 
@@ -111,7 +115,7 @@ static void load_item_user_matrix(
 /* Returns the vector representing the upper side of the similarity matrix 
  * by measuring cosine similarity pairwise for each row of the item/user matrix */
 static void item_cosine_similarity(
-    const int *item_user_matrix,
+    const value_type *item_user_matrix,
     value_type *similarity_matrix,
     const Dataset dataset)
 {
@@ -152,8 +156,10 @@ int main(int argc, char **argv) {
            globalTime=0.,
            thisTime=0.;
     Dataset dataset;
-    int *ratings = NULL, *item_user_matrix = NULL; 
-    value_type *similarity_matrix = NULL, *correction_vector = NULL;
+    value_type *ratings = NULL, 
+               *item_user_matrix = NULL, 
+               *similarity_matrix = NULL, 
+               *correction_vector = NULL;
 
     if (argc < 3 || argc > 4) {
         fprintf(stderr, 
@@ -189,7 +195,7 @@ int main(int argc, char **argv) {
     load_correction_vector(argv[2], correction_vector, distance_matrix_size);
  
     /* Create the item/user matrix from the previously loaded ratings dataset */
-    item_user_matrix = (int *) alloc(dataset->items * dataset->users, sizeof(int));
+    item_user_matrix = (value_type *) alloc(dataset->items * dataset->users, sizeof(value_type));
     assert(item_user_matrix);
     debug("Loading item/user matrix of size %dx%d\n", dataset->items, dataset->users);
     load_item_user_matrix(item_user_matrix, ratings, dataset);
