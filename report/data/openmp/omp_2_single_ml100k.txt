@@ -1,10 +1,10 @@
-Loading ratings matrix from file ../data/ml1M.mtx
-Successfully loaded 1000209 total ratings of 6040 users and 3952 items
-Loding the correction vector from file ../data/ml1M.vec
-Loading item/user matrix of size 3952x6040
-Calculating items cosine similarity matrices of 3952 elements
+Loading ratings matrix from file ../data/ml100k.mtx
+Successfully loaded 100000 total ratings of 943 users and 1682 items
+Loding the correction vector from file ../data/ml100k.vec
+Loading item/user matrix of size 1682x943
+Calculating items cosine similarity matrices of 1682 elements
 Computation will run 10 iterations
 Iteration number # 1 (9 left)Iteration number # 2 (8 left)Iteration number # 3 (7 left)Iteration number # 4 (6 left)Iteration number # 5 (5 left)Iteration number # 6 (4 left)Iteration number # 7 (3 left)Iteration number # 8 (2 left)Iteration number # 9 (1 left)Iteration number # 10 (0 left)
-Computation took [22;33m23.62525033[0m s (σ²≈47.6233) plus [22;31m2.62152879[0m for the setup.
+Computation took [22;33m1.04934574[0m s (σ²≈0.0532) plus [22;31m0.60353989[0m for the setup.
 Correction using the given vector and an error of 1e-10
 Calculations were [22;32mCORRECT[0m

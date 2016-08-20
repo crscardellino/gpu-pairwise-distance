@@ -5,6 +5,6 @@ Loading item/user matrix of size 1682x943
 Calculating items cosine similarity matrices of 1682 elements
 Computation will run 10 iterations
 Iteration number # 1 (9 left)Iteration number # 2 (8 left)Iteration number # 3 (7 left)Iteration number # 4 (6 left)Iteration number # 5 (5 left)Iteration number # 6 (4 left)Iteration number # 7 (3 left)Iteration number # 8 (2 left)Iteration number # 9 (1 left)Iteration number # 10 (0 left)
-Computation took [22;33m1.37570029[0m s (σ²≈0.1441) plus [22;31m0.49361794[0m for the setup.
+Computation took [22;33m0.52999141[0m s (σ²≈0.0308) plus [22;31m0.59293383[0m for the setup.
 Correction using the given vector and an error of 1e-10
 Calculations were [22;32mCORRECT[0m
