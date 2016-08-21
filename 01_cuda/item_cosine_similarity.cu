@@ -21,10 +21,11 @@
 /* Load the ratings from a mtx file */
 static void load_ratings_from_mtx(
     const char *fname,
-    int **ratings,
+    value_type **ratings,
     Dataset dataset)
 {
-    int i=0, row=0, col=0, rating=0;
+    int i=0; 
+    value_type row=0, col=0, rating=0;
     FILE *fstream = fopen(fname, "r");
 
     if (fstream == NULL) {
@@ -38,11 +39,15 @@ static void load_ratings_from_mtx(
         exit(EXIT_FAILURE);
     }
 
-    *ratings = (int *) alloc(dataset->size * RATINGS_OFFSET, sizeof(int));
+    *ratings = (value_type *) alloc(dataset->size * RATINGS_OFFSET, sizeof(value_type));
     assert(*ratings);
  
     for (i = 0; i < dataset->size; ++i) {
-        if(fscanf(fstream, "%d %d %d", &row, &col, &rating) != 3)
+#ifdef DOUBLE
+        if(fscanf(fstream, "%lf %lf %lf", &row, &col, &rating) != 3)
+#else
+        if(fscanf(fstream, "%f %f %f", &row, &col, &rating) != 3)
+#endif
         {
             fprintf(stderr, "The file is not valid\n");
             exit(EXIT_FAILURE);
@@ -91,19 +96,18 @@ static void load_correction_vector(
 
 /* Load the ratings matrix to a item/user matrix */
 static void load_item_user_matrix(
-    int *item_user_matrix, 
-    const int *ratings,
+    value_type *item_user_matrix, 
+    const value_type *ratings,
     const Dataset dataset) 
 {
     int i; 
-    int user, item, rating;
+    int user, item;
 
     for(i=0; i < dataset->size; i++) {
-        item = ratings[i * RATINGS_OFFSET];
-        user = ratings[i * RATINGS_OFFSET + 1];
-        rating = ratings[i * RATINGS_OFFSET + 2];
+        item = (int) ratings[i * RATINGS_OFFSET];
+        user = (int) ratings[i * RATINGS_OFFSET + 1];
         
-        item_user_matrix[item * dataset->users + user] = rating;
+        item_user_matrix[item * dataset->users + user] = ratings[i * RATINGS_OFFSET + 2];
     }
 }
 
@@ -112,10 +116,11 @@ static void load_item_user_matrix(
  * Cosine similarity operations CPU *
  ***********************************/
 
+#ifndef GPUONLY
 /* Returns the vector representing the upper side of the similarity matrix 
  * by measuring cosine similarity pairwise for each row of the item/user matrix */
 static void item_cosine_similarity(
-    const int *item_user_matrix,
+    const value_type *item_user_matrix,
     value_type *similarity_matrix,
     const Dataset dataset)
 {
@@ -139,6 +144,7 @@ static void item_cosine_similarity(
         }
     }
 }
+#endif
 
 
 /************************************
@@ -147,7 +153,7 @@ static void item_cosine_similarity(
 
 /* CUDA version. Each thread is in charge of a pair of rows */
 __global__ void item_cosine_similarity_cuda(
-    const int *item_user_matrix,
+    const value_type *item_user_matrix,
     value_type *similarity_matrix,
     const int items,
     const int users)
@@ -181,16 +187,22 @@ int main(int argc, char **argv) {
     bool correct=true;
     int i, num_iterations, distance_matrix_size;
     double startTime=0., 
-           currentTime=0., 
-           refTimeMean=0., 
            optTime=0., 
-           previousMean=0.,
 		   cpuTime=0.,
            globalTime=0.,
            thisTime=0.;
+#ifndef GPUONLY
+    double currentTime=0., 
+           refTimeMean=0., 
+           previousMean=0.;
+#endif
     Dataset dataset;
-    int *ratings = NULL, *item_user_matrix = NULL, *d_item_user_matrix = NULL; 
-    value_type *correction_vector= NULL, *similarity_matrix = NULL, *d_similarity_matrix = NULL;
+    value_type *ratings = NULL, 
+               *item_user_matrix = NULL, 
+               *d_item_user_matrix = NULL,
+               *similarity_matrix = NULL, 
+               *d_similarity_matrix = NULL,
+               *correction_vector = NULL;
 
     if (argc < 3 || argc > 4) {
         fprintf(stderr, 
@@ -226,7 +238,7 @@ int main(int argc, char **argv) {
     load_correction_vector(argv[2], correction_vector, distance_matrix_size);
  
     /* Create the item/user matrix from the previously loaded ratings dataset */
-    item_user_matrix = (int *) alloc(dataset->items * dataset->users, sizeof(int));
+    item_user_matrix = (value_type *) alloc(dataset->items * dataset->users, sizeof(value_type));
     assert(item_user_matrix);
     debug("Loading item/user matrix of size %dx%d\n", dataset->items, dataset->users);
     load_item_user_matrix(item_user_matrix, ratings, dataset);
@@ -243,6 +255,7 @@ int main(int argc, char **argv) {
 
     debug("Reference computation will run %d iterations\n", num_iterations);
 
+#ifndef GPUONLY
     for(i = 1; i <= num_iterations; i++) {
         debug("\rReference iteration number # %d (%d left)", i, num_iterations-i);
         
@@ -258,6 +271,7 @@ int main(int argc, char **argv) {
     debug("\nReference computation took %s%.5e%s s, plus %s%.5e%s for the setup.\n", 
             YELLOW_TEXT, refTimeMean, NO_COLOR, YELLOW_TEXT, cpuTime,
             NO_COLOR);
+#endif
 
     /* CUDA Setup */
 
@@ -267,12 +281,12 @@ int main(int argc, char **argv) {
     dim3 dimGrid((dataset->items + dimBlock.x - 1)/dimBlock.x,
             (dataset->items + dimBlock.y - 1)/dimBlock.y, 1);
     checkCudaErrors(cudaMalloc(&d_item_user_matrix, 
-                dataset->items * dataset->users * sizeof(int)));
+                dataset->items * dataset->users * sizeof(value_type)));
     checkCudaErrors(cudaMalloc(&d_similarity_matrix, 
                 distance_matrix_size * sizeof(value_type)));
     assert(d_item_user_matrix && d_similarity_matrix);
     checkCudaErrors(cudaMemcpy(d_item_user_matrix, item_user_matrix, 
-                dataset->items * dataset->users * sizeof(int), 
+                dataset->items * dataset->users * sizeof(value_type), 
                 cudaMemcpyDefault));
 
     globalTime += omp_get_wtime() - thisTime;
@@ -302,10 +316,12 @@ int main(int argc, char **argv) {
             "for the setup.\n", 
             YELLOW_TEXT, optTime, NO_COLOR, YELLOW_TEXT, globalTime,
             NO_COLOR);
+#ifndef GPUONLY
     debug("Rough calculations time speedup: %s%.2fx%s\n",
           BLUE_TEXT, (refTimeMean)/(optTime), NO_COLOR);
     debug("Rough wall time speedup: %s%.2fx%s\n",
           BLUE_TEXT, (refTimeMean+cpuTime)/(optTime+globalTime), NO_COLOR);
+#endif
  
     /* Correction using the previously loaded correction vector */
     debug("Correction using the given vector and an error of %.0e\n", ERROR);

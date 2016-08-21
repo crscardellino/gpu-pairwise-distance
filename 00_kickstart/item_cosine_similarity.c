@@ -39,7 +39,7 @@ static void load_ratings_from_mtx(
     assert(*ratings);
  
     for (i = 0; i < dataset->size; ++i) {
-#ifdef DEBUG
+#ifdef DOUBLE
         if(fscanf(fstream, "%lf %lf %lf", &row, &col, &rating) != 3)
 #else
         if(fscanf(fstream, "%f %f %f", &row, &col, &rating) != 3)
