@@ -253,9 +253,9 @@ int main(int argc, char **argv) {
 	cpuTime = omp_get_wtime() - thisTime;
     globalTime = cpuTime;
 
+#ifndef GPUONLY
     debug("Reference computation will run %d iterations\n", num_iterations);
 
-#ifndef GPUONLY
     for(i = 1; i <= num_iterations; i++) {
         debug("\rReference iteration number # %d (%d left)", i, num_iterations-i);
         

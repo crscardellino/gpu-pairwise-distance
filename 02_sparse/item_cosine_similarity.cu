@@ -105,6 +105,7 @@ static inline void load_correction_vector(
  * Cosine similarity operations CPU *
  ***********************************/
 
+#ifndef GPUONLY
 /* Returns the vector representing the upper side of the similarity matrix 
  * by measuring cosine similarity pairwise for each row of the item/user matrix */
 static inline void item_cosine_similarity(
@@ -141,6 +142,7 @@ static inline void item_cosine_similarity(
         }
     }
 }
+#endif
 
 
 /************************************
@@ -196,13 +198,15 @@ int main(int argc, char **argv) {
     bool correct=true;
     int i, num_iterations, distance_matrix_size, nnz;
     double startTime=0., 
-           currentTime=0., 
-           refTimeMean=0., 
            optTime=0., 
-           previousMean=0.,
            cpuTime=0.,
            globalTime=0.,
            thisTime=0.;
+#ifndef GPUONLY
+    double currentTime=0., 
+           refTimeMean=0., 
+           previousMean=0.;
+#endif
     SparseMatrix dataset;
     int *d_colInd, *d_rowPtr;
     value_type *correction_vector, *similarity_matrix, *d_data, *d_similarity_matrix;
@@ -248,6 +252,7 @@ int main(int argc, char **argv) {
     cpuTime = omp_get_wtime() - thisTime;
     globalTime = cpuTime;
 
+#ifndef GPUONLY
     debug("Reference computation will run %d iterations\n", num_iterations);
 
     for(i = 1; i <= num_iterations; i++) {
@@ -265,6 +270,7 @@ int main(int argc, char **argv) {
     debug("\nReference computation took %s%.5e%s s, plus %s%.5e%s for the setup.\n", 
             YELLOW_TEXT, refTimeMean, NO_COLOR, YELLOW_TEXT, cpuTime,
             NO_COLOR);
+#endif
 
     /* CUDA Setup */
 
@@ -315,10 +321,12 @@ int main(int argc, char **argv) {
             "for the setup.\n", 
             YELLOW_TEXT, optTime, NO_COLOR, YELLOW_TEXT, globalTime,
             NO_COLOR);
+#ifndef GPUONLY
     debug("Rough calculations time speedup: %s%.2fx%s\n",
           BLUE_TEXT, (refTimeMean)/(optTime), NO_COLOR);
     debug("Rough wall time speedup: %s%.2fx%s\n",
           BLUE_TEXT, (refTimeMean+cpuTime)/(optTime+globalTime), NO_COLOR);
+#endif
  
     /* Correction using the previously loaded correction vector */
     debug("Correction using the given vector and an error of %.0e\n", ERROR);
