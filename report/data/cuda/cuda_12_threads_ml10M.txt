@@ -1,0 +1,9 @@
+Loading ratings matrix from file ../data/ml10M.mtx
+Successfully loaded 10000054 total ratings of 69878 users and 10677 items
+Loding the correction vector from file ../data/ml10M.vec
+Loading item/user matrix of size 10677x69878
+Calculating items cosine similarity matrices of 10677 elements
+Running optimized computation
+Optimized computation took [22;33m8.45780e+02[0m s plus [22;33m2.24285e+01[0m for the setup.
+Correction using the given vector and an error of 1e-10
+Calculations were [22;32mCORRECT[0m

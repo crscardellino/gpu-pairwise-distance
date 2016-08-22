@@ -1,0 +1,13 @@
+Loading ratings matrix from file ../data/ml10M.mtx
+Successfully loaded 10000054 total ratings of 69878 users and 10677 items
+Loding the correction vector from file ../data/ml10M.vec
+Calculating items cosine similarity matrices of 10677 elements
+Reference computation will run 5 iterations
+Reference iteration number # 1 (4 left)Reference iteration number # 2 (3 left)Reference iteration number # 3 (2 left)Reference iteration number # 4 (1 left)Reference iteration number # 5 (0 left)
+Reference computation took [22;33m1.48016e+02[0m s, plus [22;33m1.83327e+01[0m for the setup.
+Running optimized computation
+Optimized computation took [22;33m1.90864e+01[0m s plus [22;33m1.95002e+01[0m for the setup.
+Rough calculations time speedup: [22;34m7.76x[0m
+Rough wall time speedup: [22;34m4.31x[0m
+Correction using the given vector and an error of 1e-10
+Calculations were [22;32mCORRECT[0m
