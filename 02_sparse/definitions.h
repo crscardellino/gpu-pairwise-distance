@@ -2,7 +2,10 @@
 #define __DEFINITIONS_H
 
 #define RATINGS_OFFSET 3
+
+#ifndef BLOCK_SIZE
 #define BLOCK_SIZE 32
+#endif
 
 /* Debug messages printing */
 #ifdef DEBUG

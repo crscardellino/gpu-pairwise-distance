@@ -1,0 +1,8 @@
+Loading ratings matrix from file ../data/ml20M.mtx
+Successfully loaded 20000263 total ratings of 138493 users and 26744 items
+Loding the correction vector from file ../data/ml20M.vec
+Calculating items cosine similarity matrices of 26744 elements
+Running optimized computation with block of size 4
+Optimized computation took [22;33m9.81831e+01[0m s plus [22;33m8.80013e+01[0m for the setup.
+Correction using the given vector and an error of 1e-10
+Calculations were [22;32mCORRECT[0m

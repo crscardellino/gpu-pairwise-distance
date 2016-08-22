@@ -298,7 +298,7 @@ int main(int argc, char **argv) {
 
     globalTime += omp_get_wtime() - thisTime;
 
-    debug("Running optimized computation\n");
+    debug("Running optimized computation with block of size %d\n", BLOCK_SIZE);
  
     /* Optimized computation */
         
