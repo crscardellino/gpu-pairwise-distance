@@ -114,7 +114,6 @@ static inline void item_cosine_similarity(
 {
 #pragma omp parallel for default(shared)
     for(int u=0; u < dataset->nrows; u++) {
-#pragma omp parallel for default(shared)
         for(int v=u; v < dataset->nrows; v++) {
             int i = dataset->rowPtr[u];
             int j = dataset->rowPtr[v];
