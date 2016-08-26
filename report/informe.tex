@@ -74,19 +74,16 @@
   haya en la matriz. No obstante, realizar este trabajo secuencialmente es del
   orden $\mathcal{O}(n^{2})$, donde $n$ es la cantidad de filas de la matriz.
 
-  % TODO: Revisar outline
-%  El informe se estructura de la siguiente manera: en la
-%  Sección~\ref{sec:problema} se describe el problema particular sobre el que se
-%  trabajaron las técnicas de optimización, se presentan los datos utilizados y
-%  la manera en que se preprocesaron y como se representan dentro del problema;
-%  la Sección~\ref{sec:experimentos} describe la configuración de los
-%  experimentos, detalla el hardware utilizado en los mismos, se describe en
-%  mayor detalle las distintas mejoras realizadas y los problemas con los
-%  encontrados al realizarlas y se presentan las métricas y mediciones
-%  utilizadas; la Sección~\ref{sec:resultados} muestra los resultados de los
-%  experimentos y hace un análisis general de los mismos; finalmente el reporte
-%  concluye en la Sección~\ref{sec:conclusiones}, donde se hace una observación
-%  general del problema y los objetivos alcanzados.
+  El informe se estructura de la siguiente manera: en la
+  Sección~\ref{sec:problema} se describe el problema particular sobre el que se
+  trabajaron las técnicas de optimización, se presentan los datos utilizados y
+  la manera en que se preprocesaron y como se representan dentro del problema;
+  la Sección~\ref{sec:optimizaciones} describe los procesos que se llevaron a
+  cabo buscando optimizar el problema con distintos procedimientos; la
+  Sección~\ref{sec:resultados} muestra los resultados de los experimentos y
+  hace un análisis general de los mismos; finalmente el reporte concluye en la
+  Sección~\ref{sec:conclusiones}, donde se hace una observación general del
+  problema y los objetivos alcanzados.
  
   \section{Descripción del problema, datos y representación}\label{sec:problema}
 
@@ -213,7 +210,7 @@
   El primer algoritmo, sin ninguna clase de optimización, es el que se busca
   mejorar en las instancias sucesivas de optimización.
 
-  El algortimo comienza por cargar la matriz de ratings en su versión COO
+  El algoritmo comienza por cargar la matriz de ratings en su versión COO
   dentro de un arreglo utilizado como matriz de N filas por 3 columnas, donde N
   es el número de datos (en este caso ratings que posee el dataset) y en las 3
   columnas se almacena el valor de la fila (el ID de la película), el valor de
@@ -262,7 +259,7 @@
   \textbf{U} (uden), y la sumatoria del denominador para el vector \textbf{V}
   (vden), se realizan en el bucle que recorre cada par de filas. Luego, al
   final se almacena el valor de la similitud coseno dividiendo {\em num} por
-  las raíces cuadradas de {\em uden} y {\em vden}. Este preocedimiento se
+  las raíces cuadradas de {\em uden} y {\em vden}. Este procedimiento se
   repite durante algunas iteraciones para eliminar el ruido proveniente del uso
   de CPU para el cálculo. 
 
@@ -301,12 +298,18 @@
   supuesto, mientras más threads se usen, más rápido se obtienen los
   resultados.
 
-  % TODO: Explicar la poca escalabilidad en eficiencia
+  Como existen dos bucles anidados que recorren la matriz (necesario para
+  recorrer cada par de filas de la misma), se probó con la paralelización
+  únicamente del bloque externo así como con la paralelización de ambos
+  bloques. Esto fue también para ver si de una u otra manera el problema
+  escalaba mejor. No obstante los resultados para uno u otro método fueron los
+  mismos por lo que se decidió realizar las mediciones siguientes sólo
+  utilizando un bucle paralelizado.
 
-  \subsection{CUDA}
+  \subsection{CUDA}\label{sec:optimizacion:cuda}
 
   La siguiente optimización que se buscó sobre los cálculos fue mediante el uso
-  de CUDA para paralelizar los cálculos via GPU. La base para cargar las
+  de CUDA para paralelizar los cálculos vía GPU. La base para cargar las
   matrices y vectores es la misma que en el caso de CPU. Por la naturaleza de
   CUDA, también hay que reservar los recursos necesarios en la GPU, además de
   hacer el traspaso de los datos desde la memoria del host a la memoria del
@@ -322,7 +325,7 @@
 
   Dado que necesitamos dos variables distintas en CUDA para recorrer la matriz
   (una por cada fila del par), los bloques de threads y del grid deben ser
-  bidimensionales. De esta manera, una dimension se utiliza para identificar
+  bidimensionales. De esta manera, una dimensión se utiliza para identificar
   unívocamente una fila del par, mientras que la otra dimensión se utiliza para
   identificar la otra fila del par. Por esta razón, cada dimensión de los
   bloques no puede poseer más de 32 threads (de lo contrario sería de un total
@@ -330,7 +333,13 @@
   grilla, a su vez, se calcula de manera tal que se puedan procesar todas las
   filas de la matriz de similitud.
 
-  CUDA muestra una mejora importante con respecto a la paralelización via CPU.
+  CUDA muestra una mejora importante en los tiempos de cálculo con respecto a
+  la paralelización vía GPU. Sin embargo, hay que destacar que el tiempo extra
+  que le toma a CUDA toda la configuración previa al cálculo suma bastante al
+  resultado final, especialmente para los conjuntos de datos más pequeños, al
+  punto de ser más lento para el caso particular del conjunto de datos ml100k.
+  El peso del tiempo de configuración disminuye a medida que el tamaño del
+  problema se hace mayor.
 
   \subsection{Matrices Ralas}
 
@@ -343,8 +352,12 @@
   la mejor opción de representación de una matriz rala se encuentra en el
   formato Yale, también conocido como formato CRS (o Compressed Row Storage).
   La matriz se carga directamente desde el formato COO (que es con el formato
-  que es guardada), al formato CSR, lo que elimina el proceso de convertir COO
-  a una matriz densa.
+  que es guardada), al formato CRS, lo que elimina el proceso de convertir COO
+  a una matriz densa. Si bien CUDA posee una librería para el manejo de
+  matrices ralas, se optó, por simplicidad, por una representación simple
+  mediante una estructura de datos nativa que hiciera uso de arrays para
+  guardar los valores no nulos, índices, punteros y el tamaño de la matriz
+  rala.
 
   Para esta representación se tuvo que replantear la manera en que se calculaba
   la similitud coseno entre dos filas, puesto que la forma para matrices densas
@@ -390,14 +403,17 @@
       \end{tabular}
       \caption*{Recursos de hardware}
   \end{table}
+
+  Cabe destacar que la GPU utilizada posee una velocidad muy superior en
+  problemas de precisión simple y que las mediciones fueron realizadas en doble
+  precisión. Precisión simple puede llegar a ser suficiente para el tipo de
+  problema que nos concierne y queda como trabajo futuro la correcta medición
+  de los mejores algoritmos (i.e., matrices ralas) en precisión simple o bien
+  en una placa cuya doble precisión sea más rápida.
  
   \subsection{Resultados}
 
   \subsubsection{Experimentos con OpenMP}
-
-  Se realizaron varios experimentos haciendo uso de OpenMP para el cálculo de
-  los datos. Para ver la escalabilidad de la paralelización con threads via
-  CPU se probó realizar los experimentos con distinto número de threads.
 
   \begin{figure}[ht]
     \centering
@@ -405,47 +421,50 @@
       \caption{Heatmap de experimentos usando OpenMP}\label{fig:heatmap:omp}
   \end{figure}
  
-  La Figura~\ref{fig:heatmap:omp} muestra los tiempos normalizados completos
-  (i.e., el tiempo de cálculo sumado al tiempo de configuración) de distintos
-  experimentos sobre los distintos conjuntos de datos, variando el número de
-  threads con los cuales se corre OpenMP. Los tipos de experimentos que se
-  detallan en la figura son los siguientes:
+  Se realizaron varios experimentos haciendo uso de OpenMP para el cálculo de
+  los datos. Para ver la escalabilidad de la paralelización con threads vía
+  CPU se probó realizar los experimentos con distinto número de threads.
 
-  \begin{description}
-      \item[(I)] Ejecución con uso de matrices densas paralelizando un solo
-          bucle \texttt{for} mediante el decorador \texttt{pragma omp parallel
-          for}.
-      \item[(II)] Ejecución con uso de matrices densas paralelizando ambos
-          bucles \texttt{for} mediante el decorador \texttt{pragma omp parallel
-          for}
-      \item[(III)] Ejecución con uso de matrices ralas paralelizando un solo
-          bucle \texttt{for} mediante el decorador \texttt{pragma omp parallel
-          for}
-  \end{description}
- 
-  La diferencia entre (I) y (II) se hizo para ver si el uso de dos decoradores
-  que parelelizaran los bucles \texttt{for} anidados de la función de cálculo
-  de la similitud coseno hacía alguna diferencia en los resultados finales
-  (buscando como objetivo la escalabilidad). El experimento (II) sólo se llevó
-  a cabo en los conjuntos de datos de menor tamaño (ml100k y ml1M) por una
-  cuestión de practicidad, también es en estos conjuntos de menor tamaño que se
-  realizaron experimentos con mayor cantidad de número de threads, debido a que
-  en conjuntos de datos más grandes llevaría demasiado tiempo el cálculo
-  utilizando poco número de threads.
+  La Figura~\ref{fig:heatmap:omp} muestra los tiempos normalizados completos en
+  microsegundos (i.e., el tiempo de cálculo sumado al tiempo de configuración)
+  de distintos experimentos sobre los distintos conjuntos de datos, variando el
+  número de threads con los cuales se corre OpenMP. Los tipos de experimentos
+  que se detallan en la figura son los siguientes:
 
-  Para el caso de (III) ya se optó por sólo experimentar con la paralelización
-  de un solo bucle \texttt{for} y para probar si con matrices ralas había mejor
-  escalabilidad sólo se probó con 6 y 12 threads para ahorrar tiempo.
+  \begin{itemize}
+      \item Ejecución con uso de matrices densas: ml100k (I), ml1M (I),
+          ml10M(I).
+      \item Ejecución con uso de matrices ralas: ml100k (II), ml1M (II),
+          ml10M (II), ml20M (II).
+  \end{itemize}
 
-  El conjunto de datos ml10M se probó con matrices densas y ralas. En el caso
-  de las matrices densas, como se explicó anteriormente, por cuestiones de
-  practicidad sólo se experimentó haciendo uso de 4 o más threads. Es este
-  conjunto el que arroja los peores resultados.
+  Como puede observarse, sólo en ``ml100k (I)'' y ``ml1M (I)'' se experimentó
+  con 2, 4, 6, 8 y 12 threads. Por su lado ``ml10M (I)'', sólo usa a partir de
+  4 threads, esto es así porque este conjunto de datos es mucho más grande que
+  los conjuntos anteriores y hacerlo de menos de 4 threads hubiese tomado mucho
+  tiempo de cómputo (que en el caso de CPU es más tendiente a generar errores
+  por lo que se necesitan varias corridas lo que hace aún más lento el
+  proceso). Por su parte no existe un ``ml20M (I)'' porque el conjunto de datos
+  es demasiado grande como para poder levantarse en memoria utilizando una
+  matriz densa de valoraciones, por lo que los únicos experimentos que pudieron
+  hacerse sobre este conjunto fueron con matrices ralas.
 
-  Para el conjunto de datos de mayor tamaño (ml20M) sólo se pudo hacer
-  experimentos utilizando matrices ralas, puesto que era imposible reservar
-  memoria para matriz densa que se formaba para la matriz de valoraciones de
-  este conjunto de datos.
+  Como puede observarse, en los dos conjuntos de menor tamaño, la escalabilidad
+  no es la deseada. Sin embargo, hay que tener en cuenta que en estos el peso
+  del tiempo de configuración sobre el tiempo final es mayor que sobre los
+  conjuntos de datos más grandes. En el caso de ``ml10M (I)'' se ve una
+  escalabilidad mucho mejor duplicando el número de cores y siguiendo este
+  patrón, lo más probable es que esto también fuera así para ml20M aplicado
+  sobre matrices densas (suponiendo una cantidad de memoria lo suficientemente
+  grande como para soportar dicha matriz. Esto es así porque en estos casos el
+  tiempo de cómputo es casi la totalidad del tiempo final y el tiempo de
+  configuración se vuelve despreciable.
+
+  En los experimentos con matrices ralas se optó, por una cuestión de
+  practicidad y tiempo, sólo ver si había escalabilidad en el paso de 6 a 12
+  threads. Claramente esto no es así. Sin embargo, hay que tener en cuenta que
+  matrices ralas ofrece otro tipo de desafíos extras en la algoritmia que por
+  falta de tiempo no pudieron ser analizados más en profundidad.
 
   \subsubsection{Comparación de experimentos CUDA y OpenMP}
   
@@ -455,29 +474,155 @@
       \caption{Comparación de experimentos CUDA y OpenMP}\label{fig:bar:cuda:omp}
   \end{figure}
 
+  La Figura~\ref{fig:bar:cuda:omp} muestra la comparación de desempeño entre
+  OpenMP y CUDA, utilizando matrices de valoración densas (barras de tonos
+  azul) y ralas (barras de tonos rojizos). Los tiempos están normalizados de
+  acuerdo al tamaño del problema y representan la suma entre tiempo de cálculo
+  y tiempo de configuración. Los experimentos que hacen uso de OpenMP y
+  paralelización vía CPU son corridos con 12 threads, mientras que todos los
+  experimentos de CUDA corren un un tamaño de 32x32 threads por bloque (i.e.
+  1024 en total).
+
+  Se hacen mediciones por cada uno de los conjuntos de datos y como se puede
+  ver, en general los algoritmos que hacen uso de matrices ralas son mejores
+  que sus contrapartes que hacen uso de matrices densas. Esto implica una
+  ganancia doble con este tipo de algoritmos: en memoria y en velocidad de
+  cómputo. Un dato, resultado del uso de matrices ralas, es, como se explicó
+  previamente, que el conjunto de datos de mayor tamaño (ml20M) no pudo ser
+  ejecutado haciendo uso de matrices densas porque no cabía en memoria (en una
+  máquina con > 120 GiB de RAM). Por otro lado, el conjunto de datos ml10M, el
+  siguiente en tamaño, ocupa 6.2 GiB de memoria utilizando matrices densas,
+  mientras que su tamaño es de 659 MiB haciendo uso de matrices ralas.
+
+  El único caso donde no se ve tanto la mejora de matrices ralas sobre matrices
+  densas (y particularmente de CUDA sobre OpenMP) es en el conjunto de menor
+  tamaño: ml100k. Como se dijo estos tiempos no son sólo los de cómputo sino
+  que también se consideran los tiempos de configuración, algo que pesa más en
+  conjuntos de datos de menor tamaño.
+
+  \subsubsection{Experimentos con CUDA}
+
   \begin{figure}[ht]
     \centering
     \includegraphics[width=\textwidth]{plots/cuda_sparse_blocks.png}
       \caption{Heatmap de experimentos usando CUDA}\label{fig:heatmap:cuda}
   \end{figure}
 
+  Una vez determinado que matrices ralas con CUDA prueban estar entre los
+  mejores resultados en general, se comparó el desempeño del algoritmo con
+  distinta cantidad de threads por bloque. La Figura~\ref{fig:heatmap:cuda}
+  muestra los distintos tiempos normalizados en microsegundos de los
+  experimentos realizados.
+
+  Se recuerda que, por la naturaleza del problema y la necesidad de recorrer
+  dos dimensiones distintas en la matriz como se explicó en la
+  Sección~\ref{sec:optimizacion:cuda}, el tamaño del bloque es necesariamente
+  un cuadrado perfecto (y en este caso una potencia de 2), luego, se probó con
+  las siguientes cantidades de threads por bloque: $32\times32=1024$,
+  $16\times16=256$, $8\times8=64$, $4\times4=16$, $2\times2=4$.
+
+  Como puede observarse, no hay gran variación en el tiempo, sobre todo a
+  partir de $4\times4$ threads por bloque. Y en general un bloque de
+  $16\times16$ arroja los mejores resultados en casi todos los conjuntos de
+  datos; siendo ml100k la única excepción con un error de $2\mathrm{e}{-2}$,
+  que probablemente sea despreciable sobre todo si se trata del tiempo extra
+  para configuración que en este caso tiene más peso que en los otros.
+
+  \subsubsection{Evolución en los distintos experimentos}
+
+  Se presenta a continuación la evolución para los 4 conjuntos de datos
+  utilizando para cada uno distintos puntos en el proceso de optimización que
+  muestran la evolución en la mejora del tiempo a lo largo de los distintos
+  experimentos.
+
   \begin{figure}[ht]
       \centering
       \includegraphics[width=\textwidth]{plots/ml100k.png}
       \caption{Evolución de tiempos sobre ml100k}\label{fig:ml100k}
   \end{figure}
+
+  La Figura~\ref{fig:ml100k} muestra los resultados para el conjunto de datos
+  más chico: ml100k. Este conjunto de datos, por obvias razones, fue sobre el
+  que más experimentos se realizaron. En este, y todos los gráficos de la
+  sección, se muestran los distintos tiempos normalizados en microsegundos
+  (tener en cuenta que también se muestran los resultados en escala
+  logarítmica). También, los gráficos destacan el tiempo total y la fracción
+  de ese tiempo que tomaron los cálculos.
+
+  El gráfico muestra como primer hito el tiempo sin realizar ninguna
+  optimización, ni siquiera mediante flags de compilador. Se continúa con la
+  optimización por flags de compilación: luego de probar distintos flags se
+  determinó que \texttt{-O3} y el uso de {\em hugepages} daban las mejores
+  mediciones, con una ganancia de {\bf 2.77x} respecto al problema sin
+  optimización.
+
+  Continuamos con OpenMP con matrices densas, que junto con la versión OpenMP
+  con matrices ralas, obtienen los mejores tiempos para este conjunto de datos
+  (tanto los el tiempo de cálculo como el tiempo total es similar en ambas
+  versiones), con una mejora aproximada de {\bf 4.85x} sobre la optimización
+  mediante flags de compilación y una mejora aproximada de {\bf 2.49x} sobre la
+  versión CUDA con matrices densas y una mejora aproximada de {\bf 2.25x} sobre
+  la versión CUDA con matrices ralas. Se observa no obstante como en este caso
+  el peso de la configuración para correr CUDA modifica el resultado final de
+  manera importante, dado que el tiempo de cálculo sigue siendo mejor en ambas
+  versiones CUDA: para el caso de CUDA con matrices densas, los cálculos son
+  3.6x más rápidos mientras que con el uso de matrices ralas la optimización
+  escala a 18x.
  
   \begin{figure}[ht]
       \centering
       \includegraphics[width=\textwidth]{plots/ml1M.png}
       \caption{Evolución de tiempos sobre ml1M}\label{fig:ml1M}
   \end{figure}
+
+  En segunda instancia tenemos la Figura~\ref{fig:ml1M} que muestra la
+  evolución de las mediciones sobre el conjunto de datos ml1M. Arrancamos desde
+  la optimización sólo por flags de compilación (pues no se midió sin
+  optimización por considerarlo no relevante) y al pasar a la paralelización
+  mediante OpenMP con matrices densas obtenemos una mejora aproximada de {\bf
+  3.35x}. CUDA con matrices densas sigue mejorando los resultados en
+  aproximadamente {\bf 1.87x}. Continúa OpenMP con matrices ralas que tiene una
+  mejora sobre la versión CUDA con matrices densas de {\bf 1.65x} y finalmente
+  las mejores mediciones quedan en la versión CUDA con matrices ralas,
+  obteniendo una mejora sobre OpenMP con matrices ralas de {\bf 1.37x}.
+
+  Como se observa, a medida que el tamaño del conjunto de datos aumenta,
+  disminuye el peso del tiempo de configuración sobre el resultado final. Sin
+  embargo sigue siendo importante, sobre todo para la mejor versión de CUDA,
+  cuyo tiempo de cálculo es muy superior a la mejor versión de OpenMP.
+
+  Es de destacar que los tiempos normalizados de este conjunto de datos en
+  particular probaron ser los mejores entre todas las mediciones. Se necesita
+  de un análisis más profundo de los datos para poder explicar este
+  comportamiento que no se hará en este trabajo por razones de tiempo.
  
   \begin{figure}[ht]
       \centering
       \includegraphics[width=\textwidth]{plots/ml10M.png}
       \caption{Evolución de tiempos sobre ml10M}\label{fig:ml10M}
   \end{figure}
+
+  La Figura~\ref{fig:ml10M} muestra algunos de los resultados para el conjunto
+  de datos ml10M. En este caso no se hicieron mediciones sin ningún tipo de
+  paralelización porque el conjunto era demasiado grande como para hacerlo. Por
+  lo tanto se tomaron medidas directamente sobre la paralelización vía CPU con
+  OpenMP (y 12 threads) utilizando matrices densas como base.  El método CUDA
+  con matrices densas ya obtiene una mejora de los resultados de
+  aproximadamente {\bf 1.43x} sobre la versión OpenMP. De la misma manera, la
+  versión OpenMP con matrices ralas mejora sobre la versión CUDA anterior en
+  {\bf 5.22x}. Finalmente, la mejor versión, CUDA con matrices ralas, genera
+  una mejora de aproximadamente {\bf 5x} sobre la versión OpenMP con matrices
+  ralas.
+
+  En este conjunto de datos se puede apreciar como el tiempo de configuración
+  se va haciendo cada vez menos importante en el resultado final, afectando en
+  mayor medida a la versión CUDA con matrices ralas y siendo prácticamente
+  despreciable para las demás versiones del algoritmo.
+
+  Como contrapartida al conjunto de datos anterior, este provee las peores
+  mediciones normalizadas. Nuevamente, requiere un estudio más profundo de los
+  datos para determinar que puede ser el causante de este comportamiento que se
+  evitará hacer en el presente trabajo.
  
   \begin{figure}[ht]
       \centering
@@ -485,20 +630,57 @@
       \caption{Evolución de tiempos sobre ml20M}\label{fig:ml20M}
   \end{figure}
 
-  % Para 20M no se puede levantar la matriz. 3067 MiB el esparso.
-  % Para 10M la matriz densa ocupa 6.2 GB en memoria. En sparse ocupa 659 MiB.
-
-  % Gráficos: - Evolución final, desde el código en cero, sin optimización, hasta el código final. Sobre un dataset (100k)
-  %         - Evolución de openmp respecto a los threads *
-  %         - Comparación openmp con cuda (dense) en 12 threads (en teoría el mejor) *
-  %         - Comparar sparse contra cuda y openmp en 12 threads *
-  %         - Ver distintos valores de tamaño de bloque para sparse, solo GPU *
-
-  % Ver resultados profiling mediante tabla (solo de los mejores valores): grpof, nvprof, perf
+  El último gráfico, presente en la Figura~\ref{fig:ml20M}, muestra los
+  resultados sobre el conjunto de datos de mayor tamaño: ml20M. Como se explicó
+  en previas secciones, para este conjunto de datos solo se pudo experimentar
+  haciendo uso de matrices ralas debido a la inmensidad del conjunto. Se
+  compara el uso de paralelización vía CPU con OpenMP contra la paralelización
+  vía GPU con CUDA, siendo esta última la más veloz, con una ganancia de
+  aproximadamente {\bf 10.91x}. Como en el caso del conjunto de datos anterior,
+  se observa también que el tiempo de configuración tiene menos peso en el
+  valor final de la medición y también que es mucho más importante para el caso
+  de CUDA que para OpenMP, consecuencia del movimiento de datos entre la
+  máquina anfitrión y el dispositivo.
 
   \section{Conclusiones}\label{sec:conclusiones}
 
-  \clearpage
+  En este trabajo se realizó la optimización desde cero del código necesario
+  para hacer cálculo de similitud coseno punto a punto en matrices de
+  valoraciones. Algo muy utilizado para realizar filtrado colaborativo en
+  sistemas de recomendación.  El trabajo hace uso de conjuntos de datos que son
+  estándares clásicos en el estudio de sistemas de recomendación: los datos de
+  MovieLens.
+
+  A lo largo del trabajo se explican los diferentes procedimientos para lograr
+  paralelizar el código, obteniendo mejores tiempos de cómputo finales.
+  Comenzando con paralelización vía CPU con OpenMP y avanzando al uso de
+  kernels CUDA y paralelización vía GPU.
+
+  Si bien la paralelización ofrece tiempos de cómputo decentes y buenas
+  mediciones en general, por la naturaleza del problema, se determinó que es el
+  uso de matrices ralas, que representan mejor datos tan dispersos como las
+  valoraciones que ciertas personas les dan a ciertos elementos, es lo que
+  verdaderamente ofrece una diferencia. Esto se ve en particular para el caso
+  de los conjuntos de datos más grandes, donde el uso de la matriz rala puede
+  hacer la diferencia entre poder realizar estos cálculos o no: el conjunto
+  ml20M ofrece un ejemplo perfecto de un problema que el uso de las estructuras
+  correctas hace la diferencia entre poder o no realizar las operaciones.
+
+  Este es un trabajo claramente introductorio al problema y que ofrece varios
+  aspectos extras para explorar y mejorar. Uno de estos aspectos, de los más
+  importantes, es la medición con el uso de precisión simple para ver su
+  diferencia con precisión doble. También requiere un trabajo más cercano sobre
+  los datos para determinar que hace que algunos conjuntos de datos posean
+  mediciones normalizadas mucho mejores que otros. Finalmente, se debería hacer
+  una exploración más cercana de la literatura que versa del tema para ver si
+  el uso de estructuras especializadas (como aquellas que pueden ofrecer
+  librerías como {\em cusparse}) mejora el rendimiento de manera significativa.
+  Quedan estos temas como trabajo futuro sobre el problema.
+
+  A grandes rasgos se lograron resultados satisfactorios y una mejora
+  importante sobre un problema bastante común en el mundo de los sistemas de
+  recomendación.
+
   \bibliographystyle{abbrv}
   \bibliography{/Users/crscardellino/Documents/Posgrado/Bibliography/bibliography.bib}
 \end{document}
